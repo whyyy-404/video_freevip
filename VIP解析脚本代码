@@ -1,8 +1,8 @@
 // ==UserScript==
-// @name         🎬【VIP追剧神器】【free】
+// @name         🎬【VIP追剧神器】【free】支持多平台，36个解析窗口可供自由选择
 // @namespace    http://tampermonkey.net/
-// @version      1.1.1
-// @description  ▶在线VIP视频解析工具【free】支持多平台【爱奇艺】【腾讯视频】【优酷土豆】【芒果TV】【乐视视频】【哔哩哔哩】【搜狐视频】等常见视频平台。制作不易，熬穿了不知道多少个夜晚，您的赞赏会是刺破黑暗苍穹的亮光照亮我前行的路❗❗❗有问题可加微信咨询：Why15236444193  学长也还有学业在身，如果加微信未能及时回复，请多多包涵哈！
+// @version      1.1.4
+// @description  ▶在线VIP视频解析工具（增强版）【free】支持多平台【爱奇艺】【腾讯视频】【优酷土豆】【芒果TV】【乐视视频】【哔哩哔哩】【搜狐视频】等常见视频平台。制作不易，熬穿了不知道多少个夜晚，您的赞赏会是刺破黑暗苍穹的亮光照亮我前行的路❗❗❗有问题可加微信咨询：Why15236444193[学长也还有学业在身，如果加微信未能及时回复，请多多包涵哈！
 // @author       伏黑甚而
 // @match        *://*/*
 // @grant        GM_registerMenuCommand
@@ -15,6 +15,49 @@
 (function() {
     'use strict';
 
+    // 解析接口配置
+    const parseApis = [
+        {"name":"🍤 虾米解析(作者推荐)","url":"https://jx.xmflv.cc/?url=","recommended":true},
+        {"name":"七哥(作者推荐)","url":"https://jx.nnxv.cn/tv.php?url="},
+        {"name":"纯净1","url":"https://im1907.top/?jx="},
+        {"name":"B站1","url":"https://jx.jsonplayer.com/player/?url="},
+        {"name":"爱豆","url":"https://jx.aidouer.net/?url="},
+        {"name":"BL","url":"https://vip.bljiex.com/?v="},
+        {"name":"冰豆","url":"https://api.qianqi.net/vip/?url="},
+        {"name":"百域","url":"https://jx.618g.com/?url="},
+        {"name":"CK","url":"https://www.ckplayer.vip/jiexi/?url="},
+        {"name":"CHok","url":"https://www.gai4.com/?url="},
+        {"name":"ckmov","url":"https://www.ckmov.vip/api.php?url="},
+        {"name":"H8","url":"https://www.h8jx.com/jiexi.php?url="},
+        {"name":"JY","url":"https://jx.playerjy.com/?url="},
+        {"name":"解析","url":"https://ckmov.ccyjjd.com/ckmov/?url="},
+        {"name":"解析la","url":"https://api.jiexi.la/?url="},
+        {"name":"老板","url":"https://vip.laobandq.com/jiexi.php?url="},
+        {"name":"MAO","url":"https://www.mtosz.com/m3u8.php?url="},
+        {"name":"M3U8","url":"https://jx.m3u8.tv/jiexi/?url="},
+        {"name":"诺讯","url":"https://www.nxflv.com/?url="},
+        {"name":"OK","url":"https://okjx.cc/?url="},
+        {"name":"PM","url":"https://www.playm3u8.cn/jiexi.php?url="},
+        {"name":"盘古","url":"https://www.pangujiexi.cc/jiexi.php?url="},
+        {"name":"RDHK","url":"https://jx.rdhk.net/?v="},
+        {"name":"人人迷","url":"https://jx.blbo.cc:4433/?url="},
+        {"name":"思云","url":"https://jx.ap2p.cn/?url="},
+        {"name":"思古3","url":"https://jsap.attakids.com/?url="},
+        {"name":"听乐","url":"https://jx.dj6u.com/?url="},
+        {"name":"维多","url":"https://jx.ivito.cn/?url="},
+        {"name":"YT","url":"https://jx.yangtu.top/?url="},
+        {"name":"云端","url":"https://sb.5gseo.net/?url="},
+        {"name":"云析","url":"https://jx.yparse.com/index.php?url="},
+        {"name":"0523","url":"https://go.yh0523.cn/y.cy?url="},
+        {"name":"17云","url":"https://www.1717yun.com/jx/ty.php?url="},
+        {"name":"180","url":"https://jx.000180.top/jx/?url="},
+        {"name":"4K","url":"https://jx.4kdv.com/?url="},
+        {"name":"8090","url":"https://www.8090g.cn/?url="}
+    ];
+
+    // 默认选择第一个接口（虾米解析）
+    let selectedApi = parseApis[0];
+
     // 创建弹窗函数
     const createVipWindow = () => {
         // 完整深色主题样式
@@ -22,8 +65,8 @@
         style.textContent = `
             #vip-container {
                 position: fixed;
-                width: 480px;
-                height: 380px;
+                width: 520px;
+                height: 480px;
                 background: #1e1e1e;
                 margin: 0;
                 border: 1px solid #3a3a3a;
@@ -89,6 +132,11 @@
                 border-radius: 6px;
                 border: none;
                 cursor: pointer;
+                transition: background 0.3s ease;
+            }
+
+            #parse-btn:hover {
+                background: #005a9e;
             }
 
             .platform-buttons {
@@ -104,6 +152,47 @@
                 padding: 8px 15px;
                 border-radius: 6px;
                 color: #e0e0e0;
+                cursor: pointer;
+                transition: all 0.3s ease;
+            }
+
+            .platform-buttons button:hover {
+                background: #3c3c3c;
+                border-color: #555;
+            }
+
+            .api-selector {
+                margin: 15px 0;
+                display: flex;
+                align-items: center;
+                gap: 10px;
+            }
+
+            .api-selector label {
+                font-size: 14px;
+                color: #e0e0e0;
+                white-space: nowrap;
+            }
+
+            #api-select {
+                flex: 1;
+                padding: 8px;
+                background: #2c2c2c;
+                border: 1px solid #444;
+                border-radius: 6px;
+                color: #ffffff;
+                font-size: 14px;
+            }
+
+            #api-select option {
+                background: #2c2c2c;
+                color: #ffffff;
+            }
+
+            #api-select option[data-recommended="true"] {
+                background: #1a4a6b;
+                color: #ffffff;
+                font-weight: bold;
             }
 
             .donate-section {
@@ -127,10 +216,19 @@
                 opacity: 0.9;
                 width: 200px!important;
             }
+
+            .recommended-badge {
+                background: #ff6b35;
+                color: white;
+                padding: 2px 6px;
+                border-radius: 4px;
+                font-size: 10px;
+                margin-left: 5px;
+            }
         `;
         document.head.appendChild(style);
 
-        // 创建弹窗容器（移除onclick属性）
+        // 创建弹窗容器
         const container = document.createElement('div');
         container.id = 'vip-container';
         container.innerHTML = `
@@ -142,6 +240,16 @@
             <div class="input-group">
                 <input type="text" id="video-url" placeholder="请输入视频URL">
                 <button id="parse-btn">解析播放</button>
+            </div>
+            <div class="api-selector">
+                <label>解析接口:</label>
+                <select id="api-select">
+                    ${parseApis.map(api =>
+                        `<option value="${api.url}" ${api.recommended ? 'data-recommended="true"' : ''}>
+                            ${api.name}${api.recommended ? ' <span class="recommended-badge">推荐</span>' : ''}
+                        </option>`
+                    ).join('')}
+                </select>
             </div>
             <div class="platform-buttons">
                 <button>爱奇艺</button>
@@ -162,7 +270,7 @@
 
         // 窗口控制变量
         let isMaximized = false;
-        let originalSize = { width: '480px', height: '380px' };
+        let originalSize = { width: '520px', height: '480px' };
 
         // 拖拽功能（带边界限制）
         let isDragging = false;
@@ -170,7 +278,7 @@
         let initialX, initialY;
 
         container.addEventListener('mousedown', (e) => {
-            if (!e.target.closest('button, input, img')) {
+            if (!e.target.closest('button, input, select, img')) {
                 isDragging = true;
                 startX = e.clientX;
                 startY = e.clientY;
@@ -216,8 +324,8 @@
         container.querySelector('.max-btn').addEventListener('click', () => {
             if (!isMaximized) {
                 originalSize = {
-                    width: container.style.width || '480px',
-                    height: container.style.height || '380px'
+                    width: container.style.width || '520px',
+                    height: container.style.height || '480px'
                 };
                 container.style.width = '95vw';
                 container.style.height = '95vh';
@@ -246,6 +354,11 @@
             });
         });
 
+        // 解析接口选择事件
+        document.getElementById('api-select').addEventListener('change', function() {
+            selectedApi = parseApis.find(api => api.url === this.value) || parseApis[0];
+        });
+
         // 解析按钮事件（核心修复）
         document.getElementById('parse-btn').addEventListener('click', function() {
             const url = document.getElementById('video-url').value.trim();
@@ -254,8 +367,7 @@
                 return;
             }
 
-            const api = 'https://jx.xmflv.cc/?url=';
-            const fullUrl = api + encodeURIComponent(url);
+            const fullUrl = selectedApi.url + encodeURIComponent(url);
 
             try {
                 // 强制弹出窗口（核心修复）
@@ -286,7 +398,7 @@
         }, 'v');
 
         GM_registerMenuCommand('📊 脚本状态', function() {
-            alert('当前版本：1.1.16\n解析工具已启动，支持多平台VIP视频解析');
+            alert('当前版本：1.1.4\n解析工具已启动，支持多平台VIP视频解析\n新增：多接口选择功能，虾米解析作者推荐！');
         });
     })();
 })();
