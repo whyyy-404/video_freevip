@@ -1,0 +1,8 @@
+blank_issues_enabled: false
+contact_links:
+  - name: 反馈前必读
+    url: https://github.com/whyyy-404/video_freevip/blob/main/CONTRIBUTING.md
+    about: 先看反馈要求、Issue 分类和 PR 规则，能明显减少来回沟通。
+  - name: 使用说明与常见问题
+    url: https://github.com/whyyy-404/video_freevip#-常见问题与解决
+    about: 安装、权限、广告说明和常见问题排查都在 README。

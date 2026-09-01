@@ -1,0 +1,59 @@
+name: Sync Labels
+
+on:
+  push:
+    branches:
+      - main
+    paths:
+      - .github/workflows/sync-labels.yml
+      - .github/ISSUE_TEMPLATE/**
+  workflow_dispatch:
+
+permissions:
+  issues: write
+
+jobs:
+  sync:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Create or update repository labels
+        uses: actions/github-script@v8
+        with:
+          script: |
+            const labels = [
+              { name: 'bug', color: 'd73a4a', description: '脚本本身的缺陷、回归或异常' },
+              { name: 'enhancement', color: 'a2eeef', description: '功能建议、体验优化或维护改进' },
+              { name: 'site-compatibility', color: 'fbca04', description: '站点兼容、解析源异常或环境适配问题' },
+              { name: 'stale', color: 'ededed', description: '长时间无活动，等待补充信息或更新' }
+            ];
+
+            const { owner, repo } = context.repo;
+            const existing = await github.paginate(github.rest.issues.listLabelsForRepo, {
+              owner,
+              repo,
+              per_page: 100
+            });
+
+            for (const label of labels) {
+              const found = existing.find(item => item.name === label.name);
+              if (found) {
+                await github.rest.issues.updateLabel({
+                  owner,
+                  repo,
+                  name: found.name,
+                  new_name: label.name,
+                  color: label.color,
+                  description: label.description
+                });
+                core.info(`Updated label: ${label.name}`);
+              } else {
+                await github.rest.issues.createLabel({
+                  owner,
+                  repo,
+                  name: label.name,
+                  color: label.color,
+                  description: label.description
+                });
+                core.info(`Created label: ${label.name}`);
+              }
+            }

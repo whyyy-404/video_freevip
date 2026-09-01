@@ -1,0 +1,52 @@
+name: Stale
+
+on:
+  schedule:
+    - cron: "30 2 * * *"
+  workflow_dispatch:
+
+permissions:
+  issues: write
+  pull-requests: write
+
+jobs:
+  stale:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Mark and close stale issues and PRs
+        uses: actions/stale@v10
+        with:
+          repo-token: ${{ secrets.GITHUB_TOKEN }}
+          stale-issue-label: stale
+          stale-pr-label: stale
+          days-before-issue-stale: 21
+          days-before-issue-close: 7
+          days-before-pr-stale: 30
+          days-before-pr-close: 14
+          remove-issue-stale-when-updated: true
+          remove-pr-stale-when-updated: true
+          exempt-issue-labels: pinned,security
+          exempt-pr-labels: pinned,security
+          operations-per-run: 200
+          stale-issue-message: |
+            该 Issue 长时间没有新的回复或补充信息，已被自动标记为 `stale`。
+
+            如果问题仍然存在，请补充以下信息后直接回复本 Issue：
+            - 完整视频链接
+            - 浏览器、脚本管理器、系统环境
+            - 复现步骤、截图或控制台报错
+            - 如果是解析问题，请说明具体解析源或站点
+
+            若在一段时间内仍无更新，系统会自动关闭；后续仍可带完整信息重新开启或新建 Issue。
+          close-issue-message: |
+            由于长时间未收到补充信息或新的活动，该 Issue 已自动关闭。
+
+            如果问题仍然存在，请按模板补全关键信息后重新评论，或新建 Issue。
+          stale-pr-message: |
+            该 PR 长时间没有新的活动，已被自动标记为 `stale`。
+
+            如果你仍在继续处理，请回复说明当前状态，或推送新的提交以解除标记。
+          close-pr-message: |
+            由于长时间没有新的活动，该 PR 已被自动关闭。
+
+            如仍需继续，请更新分支后重新开启或重新提交。

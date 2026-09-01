@@ -1,0 +1,43 @@
+name: Issue Welcome
+
+on:
+  issues:
+    types:
+      - opened
+
+permissions:
+  issues: write
+
+jobs:
+  welcome:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Comment on new issue
+        uses: actions/github-script@v8
+        with:
+          script: |
+            const body = [
+              '感谢反馈。为便于尽快定位问题，请确认以下信息是否已填写完整：',
+              '',
+              '- 完整的视频页面链接，而不是站点首页',
+              '- 浏览器、脚本管理器、系统或设备信息',
+              '- 复现步骤、截图、录屏或控制台报错',
+              '- 如果是解析问题，请说明具体解析源名称',
+              '',
+              '额外提醒：',
+              '',
+              '- 单个第三方解析源临时失效，不一定是脚本本身 Bug',
+              '- 第三方解析页的广告、跳转、伪装按钮不由脚本控制',
+              '- 移动端问题请尽量说明浏览器名称，以及是否已开启"允许用户脚本"权限',
+              '',
+              '反馈规范：',
+              '- README：https://github.com/whyyy-404/video_freevip#-常见问题与解决',
+              '- CONTRIBUTING：https://github.com/whyyy-404/video_freevip/blob/main/CONTRIBUTING.md'
+            ].join('\n');
+
+            await github.rest.issues.createComment({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              issue_number: context.issue.number,
+              body
+            });
