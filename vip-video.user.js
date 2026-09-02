@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         🫧404小站 — 🎬VIP追剧神器 | 完全免费 | 支持多平台 | (电脑/手机/平板...自适应)
 // @namespace    https://scriptcat.org/zh-CN/users/162063
-// @version      3.3.3
+// @version      3.3.4
 // @description  ▶在线VIP视频解析工具 (电脑/手机/平板...自适应) | free | 支持多平台【爱奇艺】【腾讯视频】【优酷土豆】【芒果TV】【乐视视频】【哔哩哔哩】【搜狐视频】等常见平台。✨50+解析接口任选 ✨内嵌播放无广告 ✨智能切集追剧 ✨内嵌铺满原播放区 ✨一键自动解析  制作不易，有问题可加微信咨询：Why15236444193 [如果加微信未能及时回复，请多多包涵哈！]
 // @author       yyy404
 // @match        *://*/*
@@ -1580,9 +1580,29 @@
         } catch (e) {}
     }
 
-    function muteAllPageMedia(root) {
-        const scope = root && root.querySelectorAll ? root : document;
-        scope.querySelectorAll('video, audio').forEach((media) => stopPageMedia(media));
+    // 判断元素是否在我们自己的解析播放器内（跨域 iframe 天然隔离，这里再显式兜底）
+    function isInsideOurPlayer(el) {
+        return !!(el && el.closest && el.closest('.vip_jx_iframe_wrapper'));
+    }
+
+    // 扫描指定作用域内的 video/audio，跳过我们自己的播放器
+    function mutePageMediaInScope(scope) {
+        const root = scope && scope.querySelectorAll ? scope : document;
+        root.querySelectorAll('video, audio').forEach((media) => {
+            if (isInsideOurPlayer(media)) return;
+            stopPageMedia(media);
+        });
+    }
+
+    // 扫本页面 + 钻进同源 iframe 内部（跨域 iframe 进不去会自动跳过）
+    function muteAllPageMedia() {
+        mutePageMediaInScope(document);
+        document.querySelectorAll('iframe').forEach((f) => {
+            if (isInsideOurPlayer(f)) return;
+            let doc = null;
+            try { doc = f.contentDocument; } catch (e) { return; }
+            if (doc) { try { mutePageMediaInScope(doc); } catch (e) {} }
+        });
     }
 
     // 拦截原站 play()，避免原播放器把声音/画面抢回来
@@ -1595,12 +1615,17 @@
             return Promise.resolve();
         };
         document.addEventListener('play', (event) => {
-            if (event.target instanceof HTMLMediaElement) {
+            if (event.target instanceof HTMLMediaElement && !isInsideOurPlayer(event.target)) {
                 stopPageMedia(event.target);
             }
         }, true);
         document.addEventListener('playing', (event) => {
-            if (event.target instanceof HTMLMediaElement) {
+            if (event.target instanceof HTMLMediaElement && !isInsideOurPlayer(event.target)) {
+                stopPageMedia(event.target);
+            }
+        }, true);
+        document.addEventListener('volumechange', (event) => {
+            if (event.target instanceof HTMLMediaElement && !isInsideOurPlayer(event.target)) {
                 stopPageMedia(event.target);
             }
         }, true);
@@ -1612,13 +1637,13 @@
     // 定时扫 + MutationObserver：新出现的 video/audio 立刻掐掉
     function startNativeMediaKiller() {
         blockNativeMediaPlayback();
-        muteAllPageMedia(document);
+        muteAllPageMedia();
 
         if (window._vipVideoCleanupInterval) {
             clearInterval(window._vipVideoCleanupInterval);
         }
         window._vipVideoCleanupInterval = setInterval(() => {
-            muteAllPageMedia(document);
+            muteAllPageMedia();
         }, 500);
 
         if (window._vipMediaObserver) {
@@ -1633,7 +1658,7 @@
         window._vipMediaObserver = new MutationObserver((mutations) => {
             mutations.forEach((mutation) => {
                 if (mutation.type === 'attributes' && mutation.target instanceof Element) {
-                    if (mutation.target.matches('video, audio')) {
+                    if (mutation.target.matches('video, audio') && !isInsideOurPlayer(mutation.target)) {
                         stopPageMedia(mutation.target);
                     }
                     return;
@@ -1641,10 +1666,10 @@
                 mutation.addedNodes.forEach((node) => {
                     if (!(node instanceof Element)) return;
                     if (node.matches && node.matches('video, audio')) {
-                        stopPageMedia(node);
+                        if (!isInsideOurPlayer(node)) stopPageMedia(node);
                         return;
                     }
-                    muteAllPageMedia(node);
+                    mutePageMediaInScope(node);
                 });
             });
         });
