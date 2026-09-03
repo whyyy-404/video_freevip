@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         🫧404小站 — 🎬VIP追剧神器 | 完全免费 | 支持多平台 | (电脑/手机/平板...自适应)
 // @namespace    https://scriptcat.org/zh-CN/users/162063
-// @version      3.3.4
+// @version      3.3.5
 // @description  ▶在线VIP视频解析工具 (电脑/手机/平板...自适应) | free | 支持多平台【爱奇艺】【腾讯视频】【优酷土豆】【芒果TV】【乐视视频】【哔哩哔哩】【搜狐视频】等常见平台。✨50+解析接口任选 ✨内嵌播放无广告 ✨智能切集追剧 ✨内嵌铺满原播放区 ✨一键自动解析  制作不易，有问题可加微信咨询：Why15236444193 [如果加微信未能及时回复，请多多包涵哈！]
 // @author       yyy404
 // @match        *://*/*
@@ -292,6 +292,7 @@
             overflow: hidden;
             padding: 0;
             margin-top: 0;
+            touch-action: none;
         }
         #${CONFIG.vipBoxId} .vip_float_btn {
             width: ${VIP_FLOAT_ICON_SIZE}px;
@@ -301,6 +302,7 @@
             border-radius: 8px;
             overflow: hidden;
             padding: 0;
+            touch-action: none;
         }
         #${CONFIG.vipBoxId} #vip_icon_img {
             width: 100%;
@@ -1215,9 +1217,21 @@
         };
         const isMobile = isMobilePlayerLayout();
         const vipIcon = vipBox.querySelector(".vip_icon");
+        const autoBtn = vipBox.querySelector("#vip_auto");
+        const noticeBtn = vipBox.querySelector("#vip_notice");
+        const vipIconImg = vipBox.querySelector("#vip_icon_img");
+        let suppressNextClick = false;
+        const consumeDragClick = () => {
+            if (suppressNextClick) {
+                suppressNextClick = false;
+                return true;
+            }
+            return false;
+        };
         if (isMobile) {
             // 移动端：点击切换显示/隐藏
             vipIcon.addEventListener("click", (e) => {
+                if (consumeDragClick()) return;
                 // 点击面板内部（标签页/接口列表）时不要触发切换
                 if (vipList.contains(e.target)) return;
                 if (vipList.classList.contains("visible")) {
@@ -1323,21 +1337,40 @@
             // 切换当前面板
             autoParsePanel.style.display = isVisible ? 'none' : 'block';
         });
-        const noticeBtn = vipBox.querySelector('#vip_notice');
         if (noticeBtn && noticePanel) {
+            const openNoticePanel = () => {
+                vipList.classList.remove('visible');
+                vipBox.classList.remove('visible');
+                noticePanel.style.display = 'block';
+                noticePanel.classList.add('visible');
+                applyPanelStyle();
+            };
             noticeBtn.addEventListener('click', (e) => {
                 e.stopPropagation();
+                if (consumeDragClick()) return;
                 const isVisible = noticePanel.classList.contains('visible');
                 if (isVisible) {
                     closeNoticePanel();
                 } else {
-                    vipList.classList.remove('visible');
-                    vipBox.classList.remove('visible');
-                    noticePanel.style.display = 'block';
-                    noticePanel.classList.add('visible');
-                    applyPanelStyle();
+                    openNoticePanel();
                 }
             });
+            // 桌面端：悬停浮标显示公告，离开面板隐藏；点击切换仍保留
+            if (!isMobile) {
+                noticeBtn.addEventListener('mouseenter', () => {
+                    openNoticePanel();
+                });
+                noticeBtn.addEventListener('mouseleave', (e) => {
+                    const relatedTarget = e.relatedTarget;
+                    if (relatedTarget && (noticePanel.contains(relatedTarget) || relatedTarget === noticePanel)) {
+                        return;
+                    }
+                    closeNoticePanel();
+                });
+                noticePanel.addEventListener('mouseleave', () => {
+                    closeNoticePanel();
+                });
+            }
         }
         const addApiBtn = vipBox.querySelector("#add_api_btn");
         if (addApiBtn) {
@@ -1428,8 +1461,9 @@
                 GM_openInTab(parseUrl, {active: true, insert: true, setParent: true});
             }
         });
-        vipBox.querySelector("#vip_auto").addEventListener("click", function(e) {
+        autoBtn.addEventListener("click", function(e) {
             e.stopPropagation();
+            if (consumeDragClick()) return;
             closeNoticePanel();
             if (!!GM_getValue(CONFIG.autoPlayerKey, null)) {
                 GM_setValue(CONFIG.autoPlayerKey, null);
@@ -1483,59 +1517,98 @@
                 }, 1500);
             }
         });
-        vipBox.addEventListener("mousedown", function(e) {
-            if (e.button !== 0) return;
-            const target = e.target;
-            const vipIcon = vipBox.querySelector(".vip_icon");
-            const autoBtn = vipBox.querySelector("#vip_auto");
-            const noticeBtn = vipBox.querySelector("#vip_notice");
-            const vipIconImg = vipBox.querySelector("#vip_icon_img");
-            if (vipBox.querySelector(".vip_list").contains(target)) return;
-            if (noticePanel && noticePanel.contains(target)) return;
-            if (!vipIcon.contains(target) && !autoBtn.contains(target) && !noticeBtn.contains(target)) return;
-            const dragFromVipIcon = vipIcon.contains(target);
-            e.preventDefault();
-            vipBox.style.cursor = "move";
-            if (dragFromVipIcon && vipIconImg) {
-                vipIconImg.src = VIP_ICON_GIF.drag;
+        const canStartFloatDrag = (target) => {
+            if (vipList.contains(target)) return false;
+            if (noticePanel && noticePanel.contains(target)) return false;
+            if (!vipIcon.contains(target) && !autoBtn.contains(target) && !noticeBtn.contains(target)) return false;
+            return true;
+        };
+        let floatDragging = false;
+        let floatDragMoved = false;
+        let floatDragFromVipIcon = false;
+        let floatDragOffsetX = 0;
+        let floatDragOffsetY = 0;
+        let floatDragOldTransition = '';
+        const applyFloatDragMove = (clientX, clientY) => {
+            let x = clientX - floatDragOffsetX;
+            let y = clientY - floatDragOffsetY;
+            const windowWidth = window.innerWidth;
+            const windowHeight = window.innerHeight;
+            if (x < 0) x = 0;
+            else if (x > windowWidth - vipBox.offsetWidth - 100) {
+                x = windowWidth - vipBox.offsetWidth - 100;
             }
-            const oldTransition = vipBox.style.transition;
-            vipBox.style.transition = "none";
-            const positionDiv = vipBox.getBoundingClientRect();
-            let distenceX = e.clientX - positionDiv.left;
-            let distenceY = e.clientY - positionDiv.top;
-            document.addEventListener("mousemove", moveHandler);
-            document.addEventListener("mouseup", upHandler);
-            function moveHandler(e) {
-                let x = e.clientX - distenceX;
-                let y = e.clientY - distenceY;
-                const windowWidth = window.innerWidth;
-                const windowHeight = window.innerHeight;
-                if (x < 0) x = 0;
-                else if (x > windowWidth - vipBox.offsetWidth - 100) {
-                    x = windowWidth - vipBox.offsetWidth - 100;
-                }
-                if (y < 0) y = 0;
-                else if (y > windowHeight - vipBox.offsetHeight) {
-                    y = windowHeight - vipBox.offsetHeight;
-                }
-                vipBox.style.left = x + "px";
-                vipBox.style.top = y + "px";
+            if (y < 0) y = 0;
+            else if (y > windowHeight - vipBox.offsetHeight) {
+                y = windowHeight - vipBox.offsetHeight;
             }
-            function upHandler() {
-                document.removeEventListener("mousemove", moveHandler);
-                document.removeEventListener("mouseup", upHandler);
-                vipBox.style.cursor = "pointer";
-                vipBox.style.transition = oldTransition;
-                if (dragFromVipIcon && vipIconImg) {
-                    vipIconImg.src = VIP_ICON_GIF.idle;
-                }
+            vipBox.style.left = x + "px";
+            vipBox.style.top = y + "px";
+            floatDragMoved = true;
+        };
+        const endFloatDrag = () => {
+            if (!floatDragging) return;
+            floatDragging = false;
+            document.removeEventListener("mousemove", onFloatDragMouseMove);
+            document.removeEventListener("mouseup", onFloatDragEnd);
+            document.removeEventListener("touchmove", onFloatDragTouchMove);
+            document.removeEventListener("touchend", onFloatDragEnd);
+            document.removeEventListener("touchcancel", onFloatDragEnd);
+            vipBox.style.cursor = "pointer";
+            vipBox.style.transition = floatDragOldTransition;
+            if (floatDragFromVipIcon && vipIconImg) {
+                vipIconImg.src = VIP_ICON_GIF.idle;
+            }
+            if (floatDragMoved) {
+                suppressNextClick = true;
                 GM_setValue(CONFIG.panelPosKey, {
-                    left: parseInt(vipBox.style.left),
-                    top: parseInt(vipBox.style.top)
+                    left: parseInt(vipBox.style.left, 10),
+                    top: parseInt(vipBox.style.top, 10)
                 });
             }
+        };
+        const startFloatDrag = (clientX, clientY, fromVipIcon) => {
+            floatDragging = true;
+            floatDragMoved = false;
+            floatDragFromVipIcon = fromVipIcon;
+            vipBox.style.cursor = "move";
+            if (floatDragFromVipIcon && vipIconImg) {
+                vipIconImg.src = VIP_ICON_GIF.drag;
+            }
+            floatDragOldTransition = vipBox.style.transition;
+            vipBox.style.transition = "none";
+            const positionDiv = vipBox.getBoundingClientRect();
+            floatDragOffsetX = clientX - positionDiv.left;
+            floatDragOffsetY = clientY - positionDiv.top;
+        };
+        const onFloatDragMouseMove = (e) => {
+            if (!floatDragging) return;
+            applyFloatDragMove(e.clientX, e.clientY);
+        };
+        const onFloatDragTouchMove = (e) => {
+            if (!floatDragging) return;
+            if (e.cancelable) e.preventDefault();
+            const touch = e.touches[0];
+            if (touch) applyFloatDragMove(touch.clientX, touch.clientY);
+        };
+        const onFloatDragEnd = () => endFloatDrag();
+        vipBox.addEventListener("mousedown", function(e) {
+            if (e.button !== 0) return;
+            if (!canStartFloatDrag(e.target)) return;
+            e.preventDefault();
+            startFloatDrag(e.clientX, e.clientY, vipIcon.contains(e.target));
+            document.addEventListener("mousemove", onFloatDragMouseMove);
+            document.addEventListener("mouseup", onFloatDragEnd);
         });
+        vipBox.addEventListener("touchstart", function(e) {
+            if (!canStartFloatDrag(e.target)) return;
+            const touch = e.touches[0];
+            if (!touch) return;
+            startFloatDrag(touch.clientX, touch.clientY, vipIcon.contains(e.target));
+            document.addEventListener("touchmove", onFloatDragTouchMove, { passive: false });
+            document.addEventListener("touchend", onFloatDragEnd);
+            document.addEventListener("touchcancel", onFloatDragEnd);
+        }, { passive: true });
         const autoIndex = GM_getValue(CONFIG.autoPlayerVal, 0);
         updateAutoSwitchIcon(!!GM_getValue(CONFIG.autoPlayerKey, null), allApis[autoIndex] && allApis[autoIndex].name);
     }
