@@ -1,5 +1,21 @@
 # 🎬【VIP追剧神器】【free】支持多平台
+## 💖 赞助商
 
+<table>
+<tr>
+<td width="144" align="center" valign="middle">
+  <a href="https://api-zeno.com/zh-CN/auth/register?ref=abc9818807">
+    <img src="https://api-zeno.com/icon.png" alt="api-zeno" width="48" height="48" align="middle">
+    <b>api-zeno</b>
+  </a>
+</td>
+<td valign="middle">
+  <b><a href="https://api-zeno.com/zh-CN/auth/register?ref=abc9818807">api-zeno</a></b>&nbsp;是面向开发者、创作者和团队的多模型 API 中转服务平台，兼容 OpenAI SDK，支持 GPT、Claude、Gemini、Grok、DeepSeek 等主流模型，覆盖通用对话、推理、代码、多模态以及文本、图像、视频和音频创作等场景。<b>yyy404 亲测</b>：平台售后团队非常完整，售后有保障，并提供 24 小时售后支持；优势在于套餐额度汇率较为划算，充值 ¥48 可获得 $220 额度，同时提供 AI 创作系统集合。平台采用公司化运营，服务相对稳定。缺点是存在每日额度限制，且目前知名度不高；具体模型、价格、额度及服务规则请以官网实时说明为准。
+</td>
+</tr>
+</table>
+
+---
 ## 📖 项目概述
 
 这是一个强大的用户脚本，旨在帮助用户免费观看各大视频网站的 VIP 内容。通过集成多个第三方解析接口，该脚本能够绕过视频网站的会员限制，让用户享受免费的视频观看体验。
