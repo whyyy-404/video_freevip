@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         🫧404小站 — 🎬VIP追剧神器 | 完全免费 | 支持多平台 | (电脑/手机/平板...自适应)
 // @namespace    https://scriptcat.org/zh-CN/users/162063
-// @version      3.3.5
+// @version      3.3.6
 // @description  ▶在线VIP视频解析工具 (电脑/手机/平板...自适应) | free | 支持多平台【爱奇艺】【腾讯视频】【优酷土豆】【芒果TV】【乐视视频】【哔哩哔哩】【搜狐视频】等常见平台。✨50+解析接口任选 ✨内嵌播放无广告 ✨智能切集追剧 ✨内嵌铺满原播放区 ✨一键自动解析  制作不易，有问题可加微信咨询：Why15236444193 [如果加微信未能及时回复，请多多包涵哈！]
 // @author       yyy404
 // @match        *://*/*
@@ -44,7 +44,6 @@
     }
 
     const parseApis = [
-        {"name": "默认A", "type": "1,3", "url": "https://json.fongmi.cc/web?url=", "recommended": true},
         {"name": "TXNQ", "type": "1,3", "url": "https://bfq.txnp.cn/player?url=", "recommended": true},
         {"name": "七七云", "type": "1,3", "url": "https://jx.77flv.cc/?url="},
         {"name": "虾米", "type": "1,3", "url": "https://jx.xmflv.cc/?url="},
@@ -52,11 +51,11 @@
         {"name": "HLS", "type": "1,3", "url": "https://jx.hls.one/?url="},
         {"name": "七哥", "type": "1,3", "url": "https://jx.202617.xyz/tv.php?url="},
         {"name": "七哥旧", "type": "1,3", "url": "https://jx.nnxv.cn/tv.php?url="},
-        {"name": "冰豆", "type": "1,3", "url": "https://bd.jx.cn/?url="},
         {"name": "playm3u8", "type": "1,3", "url": "https://www.playm3u8.cn/jiexi.php?url="},
         {"name": "CK", "type": "1,3", "url": "https://www.ckplayer.vip/jiexi/?url="},
         {"name": "剖元", "type": "1,3", "url": "https://www.pouyun.com/?url="},
         {"name": "爱豆", "type": "1,3", "url": "https://jx.aidouer.net/?url="},
+        {"name": "冰豆", "type": "1,3", "url": "https://bd.jx.cn/?url="},
         {"name": "M3U8", "type": "1,3", "url": "https://jx.m3u8.tv/jiexi/?url="},
         {"name": "8090", "type": "1,3", "url": "https://www.8090g.cn/?url="},
         {"name": "极速", "type": "1,3", "url": "https://jx.2s0.cn/player/?url="},
@@ -64,6 +63,7 @@
         {"name": "芒果TV1", "type": "1,3", "url": "https://video.isyour.love/player/getplayer?url="},
         {"name": "M1907", "type": "1,2,3", "url": "https://im1907.top/?jx="},
         {"name": "Yparse", "type": "1,2,3", "url": "https://jx.yparse.com/index.php?url="},
+        {"name": "默认A", "type": "1,3", "url": "https://json.fongmi.cc/web?url=", "recommended": true},
         {"name": "默认B", "type": "1,3", "url": "https://super.playr.top/?url=", "recommended": true},
         {"name": "789", "type": "1,3", "url": "https://jiexi.789jiexi.icu:4433/?url="},
         {"name": "Node", "type": "1,3", "url": "https://jx.nodenode.dpdns.org/?url="},
@@ -1263,6 +1263,10 @@
                 if (relatedTarget && (vipList.contains(relatedTarget) || relatedTarget === vipList)) {
                     return;
                 }
+                const activeEl = document.activeElement;
+                if (activeEl && (activeEl.tagName === 'INPUT' || activeEl.tagName === 'TEXTAREA' || activeEl.tagName === 'SELECT')) {
+                    return; // 焦点在输入框（如中文输入法），不关闭面板
+                }
                 vipList.classList.remove("visible");
                 vipBox.classList.remove("visible");
                 const items = vipList.querySelectorAll('li, .section-title, #donate_section');
@@ -1276,6 +1280,10 @@
                 vipList.classList.add("visible");
             });
             vipList.addEventListener("mouseleave", () => {
+                const activeEl = document.activeElement;
+                if (activeEl && (activeEl.tagName === 'INPUT' || activeEl.tagName === 'TEXTAREA' || activeEl.tagName === 'SELECT')) {
+                    return; // 焦点在输入框（如中文输入法），不关闭面板
+                }
                 vipList.classList.remove("visible");
                 vipBox.classList.remove("visible");
                 const items = vipList.querySelectorAll('li, .section-title, #donate_section');
@@ -1407,9 +1415,16 @@
                 customApis.push(newApi);
                 allApis = [...uniqueApis, ...customApis];
                 GM_setValue("custom_parse_apis", customApis);
-                DOM_CACHE.addApiForm.reset();
+                DOM_CACHE.apiNameInput.value = '';
+                DOM_CACHE.apiUrlInput.value = '';
+                DOM_CACHE.apiTypeSelect.value = '1';
                 DOM_CACHE.addApiForm.style.display = "none";
                 renderApiLists();
+                // 切回「VIP视频解析」标签页，让新接口立即可见（无需刷新）
+                vipBox.querySelectorAll(".tab-button").forEach(btn => btn.classList.remove("active"));
+                vipBox.querySelector('.tab-button[data-tab="vip"]').classList.add("active");
+                vipBox.querySelectorAll(".tab-content").forEach(content => content.classList.remove("active"));
+                vipBox.querySelector('#vip-tab').classList.add("active");
                 Swal.fire({
                     title: '添加成功',
                     text: '自定义接口已添加，直接使用无需刷新！',
