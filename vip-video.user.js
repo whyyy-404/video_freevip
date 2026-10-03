@@ -1,8 +1,8 @@
 // ==UserScript==
 // @name         🫧404小站 — 🎬VIP追剧神器 | 完全免费 | 支持多平台 | (电脑/手机/平板...自适应)
 // @namespace    https://scriptcat.org/zh-CN/users/162063
-// @version      3.3.6
-// @description  ▶在线VIP视频解析工具 (电脑/手机/平板...自适应) | free | 支持多平台【爱奇艺】【腾讯视频】【优酷土豆】【芒果TV】【乐视视频】【哔哩哔哩】【搜狐视频】等常见平台。✨50+解析接口任选 ✨内嵌播放无广告 ✨智能切集追剧 ✨内嵌铺满原播放区 ✨一键自动解析  制作不易，有问题可加微信咨询：Why15236444193 [如果加微信未能及时回复，请多多包涵哈！]
+// @version      3.3.7
+// @description  ▶在线VIP视频解析工具 (电脑/手机/平板...自适应) | free | 支持多平台【爱奇艺】【腾讯视频】【优酷土豆】【芒果TV】【乐视视频】【哔哩哔哩】【搜狐视频】等常见平台。✨10条解析接口实测可用 ✨内嵌播放无广告 ✨智能切集追剧 ✨内嵌铺满原播放区 ✨一键自动解析  制作不易，有问题可加微信咨询：Why15236444193 [如果加微信未能及时回复，请多多包涵哈！]
 // @author       yyy404
 // @match        *://*/*
 // @grant        GM_registerMenuCommand
@@ -10,6 +10,7 @@
 // @grant        GM_getValue
 // @grant        GM_setValue
 // @grant        GM_openInTab
+// @connect      *
 // @require      https://cdn.jsdelivr.net/npm/sweetalert2@11
 // @run-at       document-start
 // @icon         https://cdn.jsdmirror.com/gh/whyyy-404/icon@main/Collection/Cartoon/bear-yes.gif
@@ -43,61 +44,177 @@
         return;
     }
 
+    // ===== 66dpw 跳板页接管 =====
+    // https://www.66dpw.vip/?url=<视频页> 不是解析接口，单独打开是没用的：
+    //   · 服务端忽略 ?url=（带 / 不带 / 编码过的 ?url= 返回完全相同的首页 HTML）
+    //   · 首页自身没有播放能力（HTML 与 12 个外部 JS 里没有任何播放器库的痕迹）
+    // 它的唯一用途是当「授权宿主页」：真播放接口只有当「自己嵌在这个已授权域名下」才放行，
+    // 顶层直接打开同一个接口会被拒（实测提示「您的域名未授权播放」）。
+    // 授权判定读的是祖先域、不是 Referer 头，所以这里不伪造来源。
+    // 做法：点击时把「宿主页地址 / 真播放接口 / 要解析的视频页地址」三个值记进 GM 存储；
+    //      宿主页读到后整体替换 body，只留一个容器 + 一个 iframe，
+    //      并用常驻 CSS 把它的其余元素移出屏幕。
+    // ⚠️ iframe 上这几组属性都要带，少一个都会出问题（都是实测对比出来的）：
+    //    · sandbox="allow-scripts allow-same-origin"
+    //        缺了它，内层页面（它自己会加载统计脚本和 Cast SDK）能弹窗、能跳顶层；
+    //        带上之后这些都被禁掉。allow-same-origin 必须留，否则内层拿不到 localStorage。
+    //    · loading="eager" importance="high" fetchpriority="high"
+    //        加载优先级。不标的话这个 iframe 是默认优先级，
+    //        会和宿主页那 1 MB 脚本 + 几百张封面图抢带宽，起播明显变慢。
+    //    · allow="autoplay;encrypted-media;picture-in-picture;…" + allowfullscreen
+    //        不给她方权限，起播和全屏都会被挡。
+    // ⚠️ 不能在这里调 window.stop()：它会连「新的 frame」一起停掉，
+    //    会导致新建的 iframe 永远不出画面（表现：整页纯黑，连它自己的 loading 图都看不到）。
+    const GATE_HOST = 'www.66dpw.vip';
+    const GATE_PLAY_API = 'https://svip.qlplayer.cyou/?url=';
+    // 宿主页的窗口名。
+    // ⚠️ 必须是【具名窗口】，不能再用 '_blank'：
+    //    具名窗口同名只有一个，第二次点会复用它并导航过去，而不是再开一个新标签。
+    //    用 _blank 的话每点一次就多留一个宿主页标签，而每个宿主页都在往真播放接口加载 iframe，
+    //    十几个标签同时抢同一个域名的连接 → 新开那个的请求一直排不到 → iframe 永远不出画面。
+    const GATE_WIN_NAME = 'vip_jx_gate';
+    // 宿主页的完整前缀。判断「当前这页是不是跳板页」必须用它整串比对：
+    // ⚠️ 只查 hostname + 有没有 ?url= 是不够的 —— 那样 jiexi.html?url=…（66网2）也会被吃掉，
+    //    66网2 就变成 66网1 了。路径必须是 /，参数必须紧跟在 ? 后面。
+    const GATE_PREFIX = 'https://' + GATE_HOST + '/?url=';
+
+    // 要解析的目标地址【直接读地址栏的 ?url=】，不经过 GM 存储：
+    // 目标就明明白白写在地址栏上，手动打开或刷新那一页也能用，不存在跨页隐藏状态。
+    // （原先还写了一份到 GM 存储做兜底，但地址栏永远带着目标 ⇒ 那份兜底从来没被读到过，已删）
+    function gateInfo() {
+        try {
+            if (!String(window.location.href).startsWith(GATE_PREFIX)) return null;
+            // 取「url=」之后的全部内容，不按 & 截断（视频页地址自带 & 也不会被切掉）
+            const m = /[?&]url=(.+)$/.exec(window.location.search);
+            if (!m) return null;
+            let v = m[1];
+            try { v = decodeURIComponent(v); } catch (e) { }
+            return /^https?:\/\//i.test(v) ? { api: GATE_PLAY_API, target: v } : null;
+        } catch (e) {
+            return null;
+        }
+    }
+
+    const GATE = gateInfo();
+    if (GATE) {
+        let gateWrap = null;
+
+        const buildGate = () => {
+            if (gateWrap) return true;
+            const body = document.body;
+            if (!body) return false;
+
+            // 常驻规则：把它的元素移出屏幕并压成零尺寸。
+            // 只写 display:none 不够 —— 它自己的懒加载仍可能把首屏那几 MB 封面图拉下来。
+            const st = document.createElement('style');
+            st.textContent = 'html,body{margin:0;padding:0;height:100%;overflow:hidden;}'
+                + 'body>:not(#vip_gate_wrap){display:none !important;max-width:0 !important;max-height:0 !important;'
+                + 'overflow:hidden !important;position:absolute;left:-102030px;}';
+            (document.head || document.documentElement).appendChild(st);
+
+            // 建容器 + iframe。
+            // ⚠️ 顺序很关键：必须【先挂 load 监听 → 再进 DOM → 最后才设 src】。
+            //    之前用 body.innerHTML 插入，iframe 一进 DOM 就开始导航，
+            //    等我们再回头找它挂监听时已经错过 load，表现就是「永远加载不出来」。
+            // 容器用 fixed + 视口单位，不吃 body 的高度（宿主页自己有 360 KB 的 CSS，body 高度不可靠）
+            gateWrap = document.createElement('div');
+            gateWrap.id = 'vip_gate_wrap';
+            gateWrap.style.cssText = 'visibility:visible!important;opacity:1!important;overflow:visible!important;'
+                + 'position:fixed;top:0;left:0;width:100vw;height:100vh;margin:0;padding:0;'
+                + 'z-index:1;background:#000;display:flex;justify-content:center;align-items:center;flex-direction:column;';
+
+            const ifrEl = document.createElement('iframe');
+            ifrEl.setAttribute('frameborder', '0');
+            ifrEl.setAttribute('allow', 'autoplay; fullscreen; encrypted-media; picture-in-picture');
+            ifrEl.setAttribute('allowfullscreen', 'true');
+            ifrEl.style.cssText = 'display:block;position:absolute;top:0;left:0;width:100%;height:100%;'
+                + 'border:0;margin:0;padding:0;';
+
+            const gateSrc = GATE.api + GATE.target;
+
+            gateWrap.appendChild(ifrEl);
+            body.innerHTML = '';
+            body.appendChild(gateWrap);
+
+            // 最后一步才开始加载：容器和样式都就位了，免得加载时布局还没稳
+            ifrEl.src = gateSrc;
+
+            if (document.title === '') document.title = 'VIP追剧神器 · 播放';
+
+            return true;
+        };
+
+        // 后到的元素靠常驻 CSS 挡；这里再移一次，避免它们留在 DOM 里参与布局
+        // （容器必须保留：把它一起删掉会卸载 iframe，播放得重来）
+        const dropOthers = () => {
+            const body = document.body;
+            if (!body || !gateWrap) return;
+            Array.prototype.slice.call(body.children).forEach((el) => {
+                if (el !== gateWrap) { try { el.remove(); } catch (e) { } }
+            });
+        };
+
+        if (!buildGate()) {
+            const waitBody = setInterval(() => { if (buildGate()) clearInterval(waitBody); }, 1);
+        }
+        document.addEventListener('DOMContentLoaded', dropOthers, { once: true });
+        window.addEventListener('load', dropOthers, { once: true });
+    }
+
+    // 接口 / 条目的文字颜色标记（想换颜色只改这里）
+    // 规律：同一家的条目，不管出现在哪个列表里，都用同一个 mark —— 这样一眼能认出是同一家。
+    //   txnp    = txnp.cn 一家（紫红）：解析接口 TXNQ(bfq.) / 酥皮(art.) ＋ 搜索跳转 txnp搜索
+    //   qilin   = 66网 / 麒麟（蓝绿）：解析接口 66网1·66网2·66网3·麒麟1 ＋ 搜索跳转 66网1片库搜索
+    //   wsyzy   = 无损云（天蓝）：主站 wsyzy.cc / 采集接口 api.wsyzy.net ＋ 搜索跳转 无损云搜索
+    //   eco     = EcoHub（橙）：搜索跳转 EcoHub站
+    //   ikanbot = 爱看机器人（黄）：搜索跳转 爱看机器人
+    //   special = 邦宁（朱红）：解析结果特殊
+    // ⚠️ 这是【文字颜色】，不是底色 —— 只给名字上色，不铺背景（铺背景会"顶眼睛"，看久了不舒服）。
+    //    所以用实色 hex（不要带透明度）：文字色一旦半透明就会发灰、看不清。
+    //    底色是深灰 #2c2e34，所以这些颜色都偏亮 —— 亮色在深底上才读得清。
+    // ⚠️ 排列规则：同一家（同色）必须挨在一起，而且【各列表的家族顺序必须一致】——
+    //    下面这个声明顺序就是家族顺序，解析接口和搜索跳转都按它排。
+    // ⚠️ 配色尽量照顾色觉障碍（红绿色弱最常见）：
+    //    ① 不用纯红+纯绿这一对（红绿色弱下会混成相近的黄褐色）⇒ 66网一家用【蓝绿 teal】
+    //    ② 靠色相之余也拉开明度（黄最亮、粉次之、朱红/橙居中）
+    //    ③ 但 6 家颜色不可能两两都被所有色觉类型分辨。颜色在这里只是【辅助分组】——
+    //       名字就写在旁边，不靠颜色也能用，所以不影响功能。
+    const API_MARK_COLOR = {
+        txnp: '#c9a0f0',      // ① 紫红 —— txnp.cn 一家（TXNQ / 酥皮 / txnp搜索 / cms.txnp.cn）
+        qilin: '#3fd9b8',     // ② 蓝绿 —— 66大片网 / 麒麟 一家（原纯绿，色弱考虑换掉）
+        wsyzy: '#5cb8ff',     // ③ 天蓝 —— 无水印资源网 / 无损云
+        eco: '#ffa64d',       // ④ 橙  —— EcoHub 一家
+        ikanbot: '#f5e05a',   // ⑤ 黄  —— 爱看机器人（明度最高，最跳）
+        special: '#ff6b4a'    // ⑦ 朱红 —— 邦宁（原来跟纯绿挨着，现在绿已改蓝绿）
+    };
+
     const parseApis = [
-        {"name": "TXNQ", "type": "1,3", "url": "https://bfq.txnp.cn/player?url=", "recommended": true},
-        {"name": "七七云", "type": "1,3", "url": "https://jx.77flv.cc/?url="},
-        {"name": "虾米", "type": "1,3", "url": "https://jx.xmflv.cc/?url="},
-        {"name": "虾米2", "type": "1,3", "url": "https://jx.xmflv.com/?url="},
-        {"name": "HLS", "type": "1,3", "url": "https://jx.hls.one/?url="},
+        // ===== 解析接口【只保留已实测可用的 10 条】=====
+        // 这 10 条都是逐条实测确认可用的；历史上删掉的失效条目不再收录。
+        // ⚠️ 排列规则：同一家的（同色）挨在一起，且【家族顺序跟搜索跳转一致】
+        //    （见 API_MARK_COLOR 的声明顺序）。TXNQ 那家排最前，因为它是实测里最好用的。
+        {"name": "TXNQ", "type": "1,3", "url": "https://bfq.txnp.cn/player?url=", "mark": "txnp"},
+        {"name": "酥皮", "type": "1,3", "url": "https://art.txnp.cn/?url=", "mark": "txnp"},
+        // ===== 66大片网 / 麒麟 这一家的四个解析入口（同色 = 同一家）=====
+        // 命名：66网1/2/3 = 走 66大片网 的三个入口；麒麟1 = 麒麟自己的接口域名。
+        // 66网1：站内跳转入口（= 授权宿主页）。需要"剥 query + 不编码"的形态，所以打 clean 标记
+        {"name": "66网1", "type": "3", "url": "https://www.66dpw.vip/?url=", "mark": "qilin", "clean": true, "windowOpen": true},
+        // 66网2：独立解析页（内部再嵌真正的接口）。内嵌会被域名授权挡住
+        {"name": "66网2", "type": "3", "url": "https://www.66dpw.vip/88888888/jiexi.html?url=", "mark": "qilin"},
+        // 66网3：66网2 内部真正调用的接口（域名是 qlplayer.cyou，不在 66dpw 上，但它是 66网 那条链的终点）。
+        //   直连的内嵌模式曾被域名授权挡，弹窗模式尚未验证
+        {"name": "66网3", "type": "3", "url": "https://svip.qlplayer.cyou/?url=", "mark": "qilin"},
+        // 麒麟1：麒麟的另一个接口域名，来自「别人的」3.2.9。实测 title 与 66网3 相同（都是「麒麟视频播放器」）。
+        // ⚠️ type 用 "1,3" 是故意的：66网2/66网3 内嵌被域名授权挡所以只敢写 "3"；这条静态检查没发现拦截，
+        //    但静态查不出运行时的域名授权 ⇒ 写 "1,3" 让界面上能【一键切内嵌/弹窗】自己试。
+        {"name": "麒麟1", "type": "1,3", "url": "https://free.maccms.xyz/?url=", "mark": "qilin"},
+        // 邦宁：解析结果特殊，所以单独一个颜色。放在最后 —— 原来紧跟 66网那组（蓝绿）之后、
+        // 那时 66网还是纯绿，红绿相邻对红绿色弱不友好；现在绿已换蓝绿，而且它排在家族顺序的末位。
+        {"name": "邦宁", "type": "1,3", "url": "https://video.isyour.love/player/getplayer?url=", "mark": "special"},
+        // ===== 以下 3 条没有颜色（不属于上面任何一家）=====
         {"name": "七哥", "type": "1,3", "url": "https://jx.202617.xyz/tv.php?url="},
-        {"name": "七哥旧", "type": "1,3", "url": "https://jx.nnxv.cn/tv.php?url="},
-        {"name": "playm3u8", "type": "1,3", "url": "https://www.playm3u8.cn/jiexi.php?url="},
-        {"name": "CK", "type": "1,3", "url": "https://www.ckplayer.vip/jiexi/?url="},
-        {"name": "剖元", "type": "1,3", "url": "https://www.pouyun.com/?url="},
-        {"name": "爱豆", "type": "1,3", "url": "https://jx.aidouer.net/?url="},
-        {"name": "冰豆", "type": "1,3", "url": "https://bd.jx.cn/?url="},
-        {"name": "M3U8", "type": "1,3", "url": "https://jx.m3u8.tv/jiexi/?url="},
-        {"name": "8090", "type": "1,3", "url": "https://www.8090g.cn/?url="},
-        {"name": "极速", "type": "1,3", "url": "https://jx.2s0.cn/player/?url="},
-        {"name": "Player-JY", "type": "1,3", "url": "https://jx.playerjy.com/?url="},
-        {"name": "芒果TV1", "type": "1,3", "url": "https://video.isyour.love/player/getplayer?url="},
         {"name": "M1907", "type": "1,2,3", "url": "https://im1907.top/?jx="},
-        {"name": "Yparse", "type": "1,2,3", "url": "https://jx.yparse.com/index.php?url="},
-        {"name": "默认A", "type": "1,3", "url": "https://json.fongmi.cc/web?url=", "recommended": true},
-        {"name": "默认B", "type": "1,3", "url": "https://super.playr.top/?url=", "recommended": true},
-        {"name": "789", "type": "1,3", "url": "https://jiexi.789jiexi.icu:4433/?url="},
         {"name": "Node", "type": "1,3", "url": "https://jx.nodenode.dpdns.org/?url="},
-        {"name": "937", "type": "1,3", "url": "https://bfq.937auth.vip?url="},
-        {"name": "973", "type": "1,3", "url": "https://jx.973973.xyz/?url="},
-        {"name": "花旗", "type": "1,3", "url": "https://www.huaqi.live/?url="},
-        {"name": "麒麟", "type": "3", "url": "https://rdfplayer.mrgaocloud.com/player/?url="},
-        {"name": "B站1", "type": "1,3", "url": "https://jx.jsonplayer.com/player/?url="},
-        {"name": "BL", "type": "1,3", "url": "https://vip.bljiex.com/?v="},
-        {"name": "百域", "type": "1,3", "url": "https://jx.618g.com/?url="},
-        {"name": "CHok", "type": "1,3", "url": "https://www.gai4.com/?url="},
-        {"name": "ckmov", "type": "1,3", "url": "https://www.ckmov.vip/api.php?url="},
-        {"name": "H8", "type": "1,3", "url": "https://www.h8jx.com/jiexi.php?url="},
-        {"name": "通用", "type": "1,3", "url": "https://ckmov.ccyjjd.com/ckmov/?url="},
-        {"name": "la", "type": "1,3", "url": "https://api.jiexi.la/?url="},
-        {"name": "老板", "type": "1,3", "url": "https://vip.laobandq.com/jiexi.php?url="},
-        {"name": "MAO", "type": "1,3", "url": "https://www.mtosz.com/m3u8.php?url="},
-        {"name": "诺讯", "type": "1,3", "url": "https://www.nxflv.com/?url="},
-        {"name": "OK", "type": "1,3", "url": "https://okjx.cc/?url="},
-        {"name": "盘古", "type": "1,3", "url": "https://www.pangujiexi.cc/jiexi.php?url="},
-        {"name": "RDHK", "type": "1,3", "url": "https://jx.rdhk.net/?v="},
-        {"name": "人人迷", "type": "1,3", "url": "https://jx.blbo.cc:4433/?url="},
-        {"name": "思云", "type": "1,3", "url": "https://jx.ap2p.cn/?url="},
-        {"name": "思古3", "type": "1,3", "url": "https://jsap.attakids.com/?url="},
-        {"name": "听乐", "type": "1,3", "url": "https://jx.dj6u.com/?url="},
-        {"name": "维多", "type": "1,3", "url": "https://jx.ivito.cn/?url="},
-        {"name": "YT", "type": "1,3", "url": "https://jx.yangtu.top/?url="},
-        {"name": "云端", "type": "1,3", "url": "https://sb.5gseo.net/?url="},
-        {"name": "0523", "type": "1,3", "url": "https://go.yh0523.cn/y.cy?url="},
-        {"name": "17云", "type": "1,3", "url": "https://www.1717yun.com/jx/ty.php?url="},
-        {"name": "180", "type": "1,3", "url": "https://jx.000180.top/jx/?url="},
-        {"name": "4K", "type": "1,3", "url": "https://jx.4kdv.com/?url="},
-        {"name": "全民", "type": "1,3", "url": "https://43.240.74.102:4433?url="},
-        {"name": "夜幕", "type": "1,3", "url": "https://www.yemu.xyz/?url="},
     ];
 
     const uniqueApis = [];
@@ -127,13 +244,14 @@
     const VIP_USAGE_HTML = `
         <div id="vip-usage-desc" style="text-align:left;color:#FFF;font-size:10px;padding:0px 10px;margin-top:10px;">
             <b>📖 使用说明：</b>
-            <br>&nbsp;&nbsp;1、<b>自定义设置</b>：VIP 面板「自定义设置」里可改样式、快捷键、接口等
-            <br>&nbsp;&nbsp;2、<b>解析视频</b>：点击内嵌接口解析（优先试「默认A」「TXNQ」「七七云」等靠前接口）
+            <br>&nbsp;&nbsp;1、<b>「自定义设置」</b>改样式 / 快捷键 / 接口（加错的接口可在里面的「管理自定义接口」删掉）
+            <br>&nbsp;&nbsp;2、<b>解析视频</b>：点击内嵌接口解析（优先试靠前的「TXNQ」「酥皮」「66网1」等；）
             <br>&nbsp;&nbsp;3、<b>播放模式</b>：点击接口右侧「内嵌/弹窗」可切换
             <br>&nbsp;&nbsp;4、<b>解析切集后</b>：换集后旧播放器会关闭，开自动解析则自动解析新集
             <br>&nbsp;&nbsp;5、<b>自动解析</b>：先在「自动解析设置」选接口，再点发呆熊/跳熊浮标开关
             <br>&nbsp;&nbsp;6、<b>快捷键</b>：Alt+V 呼出/隐藏，Alt+R 刷新接口，Alt+S 样式设置
             <br>&nbsp;&nbsp;7、<b>关闭解析</b>：点击播放器右上角 × 刷新页面恢复原视频（手机端点浮标即可开关面板）
+            <br>&nbsp;&nbsp;<span style="color:#7dd3fc;"><b>8、404小站 - 影视交流 QQ 群</b>：后面出</span>
         </div>`;
 
     function updateAutoSwitchIcon(enabled, apiName) {
@@ -252,7 +370,7 @@
         noticePanel: null,
         apiNameInput: null,
         apiUrlInput: null,
-        apiTypeSelect: null
+        apiTypeSelect: null,
     };
 
     // 全局播放器控制
@@ -362,27 +480,59 @@
             border-radius: 2px;
             font-size: 12px;
             text-align: center;
-            width: calc(25% - 14px);
+            /* 一行 4 个。box-sizing:border-box + 收紧内边距后，每格可用宽度比原来多 6px */
+            width: calc(25% - 2px);
+            box-sizing: border-box;
             line-height: 21px;
             float: left;
             border: 1px solid gray;
-            padding: 0 4px;
-            margin: 4px 2px;
+            padding: 0 2px;
+            margin: 4px 1px;
             overflow: hidden;
-            white-space: nowrap;
-            text-overflow: ellipsis;
-            -o-text-overflow: ellipsis;
+            /* 改成 flex 行：名字可以被省略号截断，但「内嵌/弹窗」永远不被挤掉（否则切换不了） */
+            display: flex;
+            align-items: center;
+            justify-content: center;
             opacity: 0;
             transform: translateY(10px);
             cursor: pointer;
         }
+        #${CONFIG.vipBoxId} .vip_list li .api-name {
+            flex: 0 1 auto;
+            min-width: 0;
+            overflow: hidden;
+            white-space: nowrap;
+            text-overflow: ellipsis;
+            -o-text-overflow: ellipsis;
+        }
+        #${CONFIG.vipBoxId} .vip_list li .api-mode {
+            flex: 0 0 auto;
+            white-space: nowrap;
+        }
+        /* 解析标签页【底部】的「必看说明」：小字、左对齐、上面一条细分割线，不抢接口列表的注意力 */
+        #${CONFIG.vipBoxId} .api-must-read {
+            font-size: 11px;
+            line-height: 1.7;
+            text-align: left;
+            padding: 8px 10px 4px 10px;
+            margin-top: 10px;
+            border-top: 1px solid rgba(255, 255, 255, 0.12);
+            opacity: 0.9;
+        }
+        #${CONFIG.vipBoxId} .api-must-read b { color: #ffcf6b; }
+        /* ⚠️ 蓝色规则必须连子孙一起写：.api-must-read b（0,1,1）作用在 <b> 上时比 .qq（0,2,0）更具体，
+           只写 .qq 的话里面的 <b> 会被染成琥珀色 —— 表现就是"设了蓝色却显示黄色"。
+           ⚠️ 这段 CSS 在【模板字符串】里，注释里不能写反引号，否则会把字符串截断。 */
+        #${CONFIG.vipBoxId} .api-must-read .qq,
+        #${CONFIG.vipBoxId} .api-must-read .qq b { color: #7dd3fc; }
+        #${CONFIG.vipBoxId} .api-must-read .mr-title { color: #7dd3fc; font-weight: bold; }
         #${CONFIG.vipBoxId} .vip_list.visible li {
             opacity: 1;
             transform: translateY(0);
             transition: all 0.4s cubic-bezier(0.23, 1, 0.32, 1) 0.1s;
         }
         #${CONFIG.vipBoxId} .complex-api-list li {
-            width: calc(50% - 14px);
+            width: calc(50% - 2px);
         }
         #${CONFIG.vipBoxId} .vip_list li:hover {
             background: rgba(28, 132, 198, 0.15) !important;
@@ -413,7 +563,7 @@
                 box-sizing: border-box;
             }
             #${CONFIG.vipBoxId} .vip_list li {
-                width: calc(50% - 14px) !important;
+                width: calc(50% - 2px) !important;
                 font-size: 13px;
                 line-height: 26px;
             }
@@ -446,7 +596,7 @@
             padding-top: 10px;
             border-top: 1px solid #555;
         }
-        #${CONFIG.vipBoxId} #add_api_btn, #${CONFIG.vipBoxId} #open-style-set-btn, #${CONFIG.vipBoxId} #open-shortcut-set-btn, #${CONFIG.vipBoxId} #open-auto-parse-set-btn {
+        #${CONFIG.vipBoxId} #add_api_btn, #${CONFIG.vipBoxId} #manage_api_btn, #${CONFIG.vipBoxId} #open-style-set-btn, #${CONFIG.vipBoxId} #open-shortcut-set-btn, #${CONFIG.vipBoxId} #open-auto-parse-set-btn {
             background-color: #36383f;
             color: #ccc;
             border: 1px solid #5a5a5a;
@@ -458,11 +608,14 @@
             cursor: pointer;
             margin-left: 5px;
         }
-        #${CONFIG.vipBoxId} #add_api_btn:hover, #${CONFIG.vipBoxId} #open-style-set-btn:hover, #${CONFIG.vipBoxId} #open-shortcut-set-btn:hover, #${CONFIG.vipBoxId} #open-auto-parse-set-btn:hover {
+        #${CONFIG.vipBoxId} #add_api_btn:hover, #${CONFIG.vipBoxId} #manage_api_btn:hover, #${CONFIG.vipBoxId} #open-style-set-btn:hover, #${CONFIG.vipBoxId} #open-shortcut-set-btn:hover, #${CONFIG.vipBoxId} #open-auto-parse-set-btn:hover {
             background-color: #42444a;
         }
-        .mode-toggle {
-            cursor: pointer;
+        /* 「 | 内嵌 / 弹窗」里那个字。【只有一个类 .mode】—— 能不能点不由类名区分，
+           由 <li> 上有没有 data-modes 决定（访问 togglePlayMode 之前会先查它）。
+           故意不加 cursor:pointer —— 可切的和不可切的长得完全一样，
+           不给"看着能点、点了没反应"的假提示。 */
+        .mode {
             margin-left: 2px;
         }
         .section-title {
@@ -531,6 +684,28 @@
         #${CONFIG.vipBoxId} .tab-content.active {
             display: block;
         }
+        /* ===== 共用的表单外观 =====
+           输入框(input/select)和主按钮的外观在多个标签页里反复出现、属性值一模一样，
+           这里集中写一份；下面各规则只留自己特有的（padding / font-size / width 等）。
+           ⚠️ 顺序要求：这条必须在各具体规则【之前】—— 选择器同优先级时，靠后的才盖得住。
+           ⚠️ .add-api-form .cancel-btn 改的是背景色，它选择器更具体，不受这条影响。 */
+        #${CONFIG.vipBoxId} .add-api-form input,
+        #${CONFIG.vipBoxId} .add-api-form select,
+        #vip-style-set-panel input,
+        #vip-shortcut-set-panel input,
+        #vip-auto-parse-set-panel select {
+            border-radius: 3px;
+            border: 1px solid #5a5a5a;
+            background-color: #2c2e34;
+            color: #ccc;
+        }
+        #${CONFIG.vipBoxId} .add-api-form button {
+            border: none;
+            border-radius: 3px;
+            background-color: #1c84c6;
+            color: #fff;
+            cursor: pointer;
+        }
         #${CONFIG.vipBoxId} .add-api-form {
             padding: 10px;
             border-radius: 4px;
@@ -545,23 +720,75 @@
             width: 100%;
             padding: 6px;
             margin: 5px 0;
-            border-radius: 3px;
-            border: 1px solid #5a5a5a;
-            background-color: #2c2e34;
-            color: #ccc;
         }
         #${CONFIG.vipBoxId} .add-api-form button {
             padding: 8px 12px;
             margin: 5px 2px;
-            border: none;
-            border-radius: 3px;
-            cursor: pointer;
-            background-color: #1c84c6;
-            color: white;
             font-size: 12px;
         }
         #${CONFIG.vipBoxId} .add-api-form .cancel-btn {
             background-color: #72747a;
+        }
+        /* ===== 「管理自定义接口」面板 =====
+           为什么要有它：原来 customApis 只增不减（全文件只有 push，没有删除/编辑入口），
+           加错一个地址就只能去清浏览器数据。这里列出用户加过的每一条 + 一个删除按钮。
+           它不在 .add-api-form 里面，所以拿不到那条共用输入框样式，这里单独写。 */
+        #${CONFIG.vipBoxId} .custom-api-manage {
+            display: none;
+            margin: 10px;
+            padding: 8px 10px;
+            border-radius: 4px;
+            border: 1px solid #5a5a5a;
+            text-align: left;
+        }
+        #${CONFIG.vipBoxId} .custom-api-row {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            padding: 6px 0;
+            border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+        }
+        #${CONFIG.vipBoxId} .custom-api-row:last-child {
+            border-bottom: none;
+        }
+        #${CONFIG.vipBoxId} .custom-api-info {
+            flex: 1 1 auto;
+            min-width: 0;
+        }
+        #${CONFIG.vipBoxId} .custom-api-name {
+            display: block;
+            font-size: 12px;
+        }
+        #${CONFIG.vipBoxId} .custom-api-url {
+            display: block;
+            font-size: 10px;
+            opacity: 0.65;
+            word-break: break-all;
+        }
+        #${CONFIG.vipBoxId} .custom-api-del {
+            flex: 0 0 auto;
+            padding: 4px 10px;
+            border: none;
+            border-radius: 3px;
+            background-color: #b3352f;
+            color: #fff;
+            font-size: 11px;
+            cursor: pointer;
+        }
+        #${CONFIG.vipBoxId} .custom-api-del:hover {
+            background-color: #d13f38;
+        }
+        #${CONFIG.vipBoxId} .custom-api-empty {
+            font-size: 11px;
+            opacity: 0.7;
+            text-align: center;
+            padding: 2px 0;
+        }
+        /* 自定义接口在解析列表里的记号：中性灰蓝，不占用 7 个家族色 */
+        #${CONFIG.vipBoxId} .api-custom-mark {
+            color: #9fb3c8;
+            font-weight: bold;
+            margin-right: 1px;
         }
         #vip-style-set-panel, #vip-shortcut-set-panel, #vip-auto-parse-set-panel {
             padding: 10px;
@@ -675,6 +902,45 @@
         return encodeURIComponent(url).replace(/%20/g, '+');
     }
 
+    function escapeAttr(s) {
+        return String(s == null ? '' : s)
+            .replace(/&/g, '&amp;')
+            .replace(/"/g, '&quot;')
+            .replace(/</g, '&lt;')
+            .replace(/>/g, '&gt;');
+    }
+
+    // 裸域名 → 补全 MacCMS 标准路径
+    function isKeywordSearchForbidden(json) {
+        if (!json) return false;
+        if (Number(json.code) === 1002) return true;
+        return /forbids?\s*keyword|禁止[\s\S]{0,4}搜索|不支持[\s\S]{0,4}搜索/i.test(String(json.msg || ''));
+    }
+
+    function copyTextToClipboard(inputEl, text) {
+        let copied = false;
+        try {
+            inputEl.select();
+            inputEl.setSelectionRange(0, 99999);
+            copied = document.execCommand('copy');
+        } catch (e) { copied = false; }
+        if (!copied && navigator.clipboard) {
+            navigator.clipboard.writeText(text).catch(() => {});
+            copied = true;
+        }
+        try {
+            Swal.fire({
+                title: copied ? '已复制' : '请手动复制',
+                text: copied ? '已复制到剪贴板' : '自动复制失败，请手动选中复制',
+                icon: copied ? 'success' : 'warning',
+                toast: true,
+                position: 'center',
+                timer: copied ? 1500 : 2500,
+                showConfirmButton: false
+            });
+        } catch (e) {}
+    }
+
     function buildApiListsHtml() {
         let simpleApisHtml = "<div class='section-title'>[内嵌播放+弹窗无选集]</div><ul class='simple-api-list'>";
         let complexApisHtml = "<div class='section-title'>[弹窗带选集]</div><ul class='complex-api-list'>";
@@ -682,26 +948,56 @@
         allApis.forEach((item, index) => {
             const types = item.type.split(',');
             const name = item.name;
-            if (types.includes("1") || types.includes("3")) {
-                if ((types.includes("1") || types.includes("3")) && !types.includes("2")) {
-                    if (types.includes("1") && types.includes("3")) {
-                        simpleApisHtml += `<li class="api-item combined-simple" data-index="${index}" data-modes="1,3" data-current-mode="1" title="${name}">${name} | <span class="mode-toggle">内嵌</span></li>`;
-                    } else if (types.includes("1")) {
-                        simpleApisHtml += `<li class="api-item" data-index="${index}" data-mode="1" title="${name}">${name} | 内嵌</li>`;
-                    } else if (types.includes("3")) {
-                        simpleApisHtml += `<li class="api-item" data-index="${index}" data-mode="3" title="${name}">${name} | 弹窗</li>`;
-                    }
-                }
-                if (types.includes("1") && types.includes("2") && types.includes("3")) {
-                    simpleApisHtml += `<li class="api-item combined-simple" data-index="${index}" data-modes="1,3" data-current-mode="1" title="${name}">${name} | <span class="mode-toggle">内嵌</span></li>`;
-                }
+            // 带 mark 的接口用【文字颜色】标记（颜色见 API_MARK_COLOR）；注意兜底必须是 inherit ——
+            // 写成 transparent 当底色没问题，当文字色就成了"字看不见"。
+            // ⚠️ 颜色只能加在【名字】(.api-name) 上，【不能】加在 <li> 上 ——
+            //    加在 <li> 上时，<li> 里那些没有自己 color 的子元素会一起继承过来，
+            //    表现就是「 | 弹窗」「 | 内嵌」这几个字也跟着变成标记色。
+            const nameStyle = item.mark ? ` style="color:${API_MARK_COLOR[item.mark] || 'inherit'};"` : '';
+            // 自定义接口（用户在「自定义设置」里加的）在 allApis 里【排在最后】——
+            // 所以 index >= uniqueApis.length 就是判据。它们没有家族色，
+            // 就在名字前面加个 ＋ 记号，免得跟内置条目混在一起分不清。
+            const isCustom = index >= uniqueApis.length;
+            const customMark = isCustom ? '<span class="api-custom-mark">＋</span>' : '';
+            // 名字和 title 一律过 escapeAttr：自定义的名字是手输的，
+            // 里面若有 " 或 < 会把属性/标签结构弄坏
+            const safeName = escapeAttr(name);
+            const titleAttr = escapeAttr(isCustom ? name + '（自定义接口）' : name);
+            // 「模式」那一列只有三种情况，一个类 .mode 就够：
+            //   ① 同时支持 1 和 3 → 两种模式都能用，那个字可点着切（靠 data-modes 认出来）
+            //   ② 只支持 1        → 只能内嵌
+            //   ③ 只支持 3        → 只能弹窗
+            // ⚠️ ② ③ 要排除「含 2」的：含 2 的走下面的 complex 列表（带选集），
+            //    在这儿再出一个"内嵌"小格子，等于同一个接口多一条没意义的入口。
+            //    ① 不排除 —— "1,2,3"（比如 M1907）本来就该两边都出现。
+            // 注：上面这套判断是从 3.3.6 继承下来的，原来写成 4 个分支、其中第 4 个和第 1 个产出的 HTML
+            //     一字不差（只是被 !includes2 挡住了才需要抄一份）。这里合并成等价的 2 条 if。
+            const bothModes = types.includes("1") && types.includes("3");
+            const oneMode = bothModes ? null : (types.includes("1") ? "1" : (types.includes("3") ? "3" : null));
+            if (bothModes || (oneMode && !types.includes("2"))) {
+                const attr = bothModes ? ' data-modes="1,3" data-current-mode="1"' : ` data-mode="${oneMode}"`;
+                const cls = bothModes ? "api-item combined-simple" : "api-item";
+                const word = (bothModes || oneMode === "1") ? "内嵌" : "弹窗";
+                simpleApisHtml += `<li class="${cls}"${attr} data-index="${index}" title="${titleAttr}"><span class="api-name"${nameStyle}>${customMark}${safeName}</span><span class="api-mode"> | <span class="mode">${word}</span></span></li>`;
             }
             if (types.includes("2")) {
-                complexApisHtml += `<li class="api-item" data-index="${index}" data-mode="2" title="${name}">${name}</li>`;
+                complexApisHtml += `<li class="api-item" data-index="${index}" data-mode="2" title="${titleAttr}"><span class="api-name"${nameStyle}>${customMark}${safeName}</span></li>`;
             }
         });
         simpleApisHtml += "<div style='clear:both;'></div></ul>";
         complexApisHtml += "<div style='clear:both;'></div></ul>";
+        // 「必看说明」必须由这里产出，【不能】写在 #vip-tab 的模板里 ——
+        // renderApiLists() 会执行 `vipTab.innerHTML = simple + complex` 整个覆盖，
+        // 写在模板里的东西会被冲掉（加自定义接口、切样式都会触发它）。
+        complexApisHtml += `
+            <div class="api-must-read">
+                <span class="mr-title">(╬▔皿▔)╯👉必看说明：</span>
+                <br>&nbsp;&nbsp;1、本脚本为开源项目，完全免费，请勿上当受骗
+                <br>&nbsp;&nbsp;2、请勿轻信任何广告，请谨慎辨别！
+                <br>&nbsp;&nbsp;3、如遇卡顿 / 无法加载，可切换不同线路 / 使用海外网络观看
+                <br>&nbsp;&nbsp;4、本脚本未提供资源上传、存储服务；播放器只拉流、不上传，不在后台做 P2P 上传、占用你的上行带宽
+                <br>&nbsp;&nbsp;<span class="qq"><b>5、交流 QQ 群 请查看公告8</b></span>
+            </div>`;
         return { simpleApisHtml, complexApisHtml };
     }
 
@@ -712,6 +1008,38 @@
         DOM_CACHE.simpleApiList = DOM_CACHE.vipTab.querySelector('.simple-api-list');
         DOM_CACHE.complexApiList = DOM_CACHE.vipTab.querySelector('.complex-api-list');
         applyPanelStyle();
+    }
+
+    // 把 type 的 "1,3" 这种代号翻成人话，给"管理自定义接口"面板显示用
+    const API_TYPE_LABEL = {
+        '1': '只能内嵌',
+        '2': '只能弹窗 · 带选集',
+        '3': '只能弹窗 · 不带选集',
+        '1,3': '内嵌 + 弹窗（可切换）',
+        '1,2,3': '内嵌 + 弹窗 + 带选集'
+    };
+
+    // 列出自己添加的解析接口，每条一个「删除」。
+    // customApis 若只增不减，加错了就只能去清浏览器数据。
+    function renderCustomApiManage() {
+        const box = DOM_CACHE.customApiManage;
+        if (!box) return;
+        if (!customApis.length) {
+            box.innerHTML = '<div class="custom-api-empty">还没有添加过自定义接口</div>';
+            return;
+        }
+        let html = '';
+        customApis.forEach((api, i) => {
+            html += '<div class="custom-api-row">'
+                + '<span class="custom-api-info">'
+                + '<b class="custom-api-name">＋' + escapeAttr(api.name) + '</b>'
+                + '<span class="custom-api-url">' + escapeAttr(api.url)
+                + ' · ' + escapeAttr(API_TYPE_LABEL[api.type] || api.type) + '</span>'
+                + '</span>'
+                + '<button class="custom-api-del" data-ci="' + i + '">删除</button>'
+                + '</div>';
+        });
+        box.innerHTML = html;
     }
 
     function applyPanelStyle(style = null) {
@@ -732,18 +1060,20 @@
         });
 
         DOM_CACHE.vipList.querySelectorAll('.api-item').forEach(el => {
+            // 这里只给 <li> 设"面板字体色"。带 mark 的条目不受影响 ——
+            // 它的标记色加在子元素 .api-name 上，自己的行内样式优先于从 <li> 继承，所以不会被这句盖掉。
             el.style.color = fontColor;
             el.style.borderColor = 'rgba(128,128,128,0.5)';
         });
 
-        DOM_CACHE.vipList.querySelectorAll('.mode-toggle').forEach(el => {
+        DOM_CACHE.vipList.querySelectorAll('.mode').forEach(el => {
             el.style.color = '#1c84c6';
         });
 
+        // 所有标签按钮都设成字体色；当前选中的那个靠 CSS 的 .tab-button.active { color: ...!important } 保持高亮
+        // （原来只在"未选中"时设色，导致初始化时处于选中的「VIP视频解析」永远拿不到颜色，切走后变黑）
         DOM_CACHE.vipList.querySelectorAll('.tab-button').forEach(el => {
-            if (!el.classList.contains('active')) {
-                el.style.color = fontColor;
-            }
+            el.style.color = fontColor;
         });
 
         DOM_CACHE.vipList.querySelectorAll('.tab-header').forEach(el => {
@@ -754,7 +1084,7 @@
             el.style.color = fontColor;
         });
 
-        DOM_CACHE.vipList.querySelectorAll('.add-api-form').forEach(el => {
+        DOM_CACHE.vipList.querySelectorAll('.add-api-form, .custom-api-manage').forEach(el => {
             el.style.backgroundColor = bgColor;
         });
 
@@ -1074,20 +1404,24 @@
         let customSettingsHtml = `
             <div style="padding: 10px; text-align: center;">
                 <button id="add_api_btn">添加自定义接口</button>
+                <button id="manage_api_btn">管理自定义接口</button>
                 <button id="open-style-set-btn">面板样式设置</button>
                 <button id="open-shortcut-set-btn">自定义快捷键</button>
                 <button id="open-auto-parse-set-btn">自动解析设置</button>
                 <div class="add-api-form" id="add-api-form">
                     <input type="text" id="api-name" placeholder="接口名称">
-                    <input type="text" id="api-url" placeholder="接口地址 (例: https://jx.example.com/?url=)">
+                    <input type="text" id="api-url" placeholder="接口地址（例：https://jx.example.com/?url=；参数名也可能不是 url，比如 ?jx=）">
                     <select id="api-type">
                         <option value="1">内嵌播放</option>
                         <option value="2">弹窗播放带选集</option>
                         <option value="3">弹窗播放不带选集</option>
+                        <option value="1,3">内嵌 + 弹窗（两种都能用，可切换）</option>
+                        <option value="1,2,3">内嵌 + 弹窗 + 带选集（全都支持）</option>
                     </select>
                     <button id="save-api-btn">添加</button>
                     <button class="cancel-btn" id="cancel-api-btn">取消</button>
                 </div>
+                <div class="custom-api-manage" id="custom-api-manage"></div>
             </div>
         `;
         const isAutoEnabled = !!GM_getValue(CONFIG.autoPlayerKey, null);
@@ -1096,7 +1430,7 @@
             <div class="vip_notice_panel" id="vip_notice_panel">
                 ${VIP_USAGE_HTML}
                 <div id="donate_section" style="text-align: center;">
-                    <div style="font-size: 12px; margin-bottom: 5px;">如果觉得好用，欢迎打赏支持</div>
+                    <div style="font-size: 12px; margin-bottom: 5px;">如果觉得好用，欢迎打赏支持（づ￣3￣）づ╭❤️～</div>
                     <img id="qr-code-img" src="data:image/jpeg;base64,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" alt="爱与正义" style="max-width: 100px; max-height: 100px; border: 1px solid #ddd; background: white;">
                 </div>
             </div>`;
@@ -1177,9 +1511,11 @@
         DOM_CACHE.apiNameInput = vipBox.querySelector('#api-name');
         DOM_CACHE.apiUrlInput = vipBox.querySelector('#api-url');
         DOM_CACHE.apiTypeSelect = vipBox.querySelector('#api-type');
+        DOM_CACHE.customApiManage = vipBox.querySelector('#custom-api-manage');
         DOM_CACHE.simpleApiList = vipBox.querySelector('.simple-api-list');
         DOM_CACHE.complexApiList = vipBox.querySelector('.complex-api-list');
         DOM_CACHE.noticePanel = vipBox.querySelector('#vip_notice_panel');
+        renderCustomApiManage();
         createStyleSetPanel();
         createShortcutSetPanel();
         createAutoParseSetPanel();
@@ -1205,29 +1541,69 @@
         return !!(uaMobile || narrow);
     }
 
+    // 切换标签页：按钮高亮 + 内容显示。
+    // 抽出来的原因：「添加自定义接口后切回解析页」那段原来是把这个动作【手写了一遍】，
+    // 以后加标签页会漏改其中一处。
+    function switchTab(tabId) {
+        const box = DOM_CACHE.vipBox;
+        if (!box) return;
+        box.querySelectorAll('.tab-button').forEach(btn => {
+            btn.classList.toggle('active', btn.getAttribute('data-tab') === tabId);
+        });
+        box.querySelectorAll('.tab-content').forEach(content => {
+            content.classList.toggle('active', content.id === tabId + '-tab');
+        });
+    }
+
+    // ===== 事件绑定 =====
+    // 事件绑定入口：只负责准备共享的东西（DOM 引用 + 3 个跨组的小工具），然后依次调用下面各功能组。
+    // 按功能拆开、而不是全堆在一个大函数里 —— 改哪个交互就去哪个函数，局部变量也不会互相污染。
     function bindEvents() {
         const vipBox = DOM_CACHE.vipBox;
-        const vipList = DOM_CACHE.vipList;
-        const noticePanel = DOM_CACHE.noticePanel;
-        const closeNoticePanel = () => {
-            if (noticePanel) {
-                noticePanel.classList.remove('visible');
-                noticePanel.style.display = 'none';
-            }
+        let suppressNextClick = false;   // 拖拽结束时浏览器还会补发一次 click，用它吞掉那一次
+        const ctx = {
+            vipBox: vipBox,
+            vipList: DOM_CACHE.vipList,
+            noticePanel: DOM_CACHE.noticePanel,
+            vipIcon: vipBox.querySelector(".vip_icon"),
+            autoBtn: vipBox.querySelector("#vip_auto"),
+            noticeBtn: vipBox.querySelector("#vip_notice"),
+            vipIconImg: vipBox.querySelector("#vip_icon_img"),
+            isMobile: isMobilePlayerLayout(),
+            closeNoticePanel: () => {
+                const p = DOM_CACHE.noticePanel;
+                if (p) {
+                    p.classList.remove('visible');
+                    p.style.display = 'none';
+                }
+            },
+            // 被面板开关 / 公告 / 自动解析 / 拖拽四处共用，所以收进 ctx 一起传，
+            // 而不是让每个小函数各自复制一份状态
+            consumeDragClick: () => {
+                if (suppressNextClick) {
+                    suppressNextClick = false;
+                    return true;
+                }
+                return false;
+            },
+            markDragClick: () => { suppressNextClick = true; }
         };
-        const isMobile = isMobilePlayerLayout();
-        const vipIcon = vipBox.querySelector(".vip_icon");
-        const autoBtn = vipBox.querySelector("#vip_auto");
-        const noticeBtn = vipBox.querySelector("#vip_notice");
-        const vipIconImg = vipBox.querySelector("#vip_icon_img");
-        let suppressNextClick = false;
-        const consumeDragClick = () => {
-            if (suppressNextClick) {
-                suppressNextClick = false;
-                return true;
-            }
-            return false;
-        };
+        bindPanelToggleEvents(ctx);
+        bindTabEvents(ctx);
+        bindSettingsPanelEvents(ctx);
+        bindNoticeEvents(ctx);
+        bindCustomApiEvents(ctx);
+        bindParseEvents(ctx);
+        bindAutoParseEvents(ctx);
+        bindDragEvents(ctx);
+        // 收尾：把自动解析浮标的图标刷成当前状态（原来在 bindEvents 末尾）
+        const autoIndex = GM_getValue(CONFIG.autoPlayerVal, 0);
+        updateAutoSwitchIcon(!!GM_getValue(CONFIG.autoPlayerKey, null), allApis[autoIndex] && allApis[autoIndex].name);
+    }
+
+    // ① 面板开关：移动端点按切换 / 桌面 hover 显示隐藏
+    function bindPanelToggleEvents(ctx) {
+        const { vipBox, vipList, vipIcon, isMobile, closeNoticePanel, consumeDragClick } = ctx;
         if (isMobile) {
             // 移动端：点击切换显示/隐藏
             vipIcon.addEventListener("click", (e) => {
@@ -1292,16 +1668,24 @@
                 });
             });
         }
+    }
+
+    // ② 标签页切换
+    function bindTabEvents(ctx) {
+        const { vipBox } = ctx;
         const tabButtons = vipBox.querySelectorAll(".tab-button");
         tabButtons.forEach(button => {
             button.addEventListener("click", function() {
-                tabButtons.forEach(btn => btn.classList.remove("active"));
-                vipBox.querySelectorAll(".tab-content").forEach(content => content.classList.remove("active"));
-                this.classList.add("active");
                 const tabId = this.getAttribute("data-tab");
-                vipBox.querySelector(`#${tabId}-tab`).classList.add("active");
+                switchTab(tabId);
             });
         });
+
+    }
+
+    // ③ 设置面板
+    function bindSettingsPanelEvents(ctx) {
+        const { vipBox } = ctx;
         vipBox.querySelector('#open-style-set-btn').addEventListener('click', (e) => {
             e.stopPropagation();
             const stylePanel = DOM_CACHE.styleSetPanel;
@@ -1345,6 +1729,11 @@
             // 切换当前面板
             autoParsePanel.style.display = isVisible ? 'none' : 'block';
         });
+    }
+
+    // ⑥ 公告浮标 + 公告面板
+    function bindNoticeEvents(ctx) {
+        const { vipBox, vipList, noticeBtn, noticePanel, isMobile, closeNoticePanel, consumeDragClick } = ctx;
         if (noticeBtn && noticePanel) {
             const openNoticePanel = () => {
                 vipList.classList.remove('visible');
@@ -1363,23 +1752,34 @@
                     openNoticePanel();
                 }
             });
-            // 桌面端：悬停浮标显示公告，离开面板隐藏；点击切换仍保留
+            // 桌面端：悬停浮标显示公告，离开就收起来；点击切换仍保留
+            // ⚠️ 不能"一离开浮标就立刻关"：面板在 left:72px，而浮标只有 56px 宽，中间有约 16px 的缝隙。
+            //    鼠标从浮标移向面板时会先落到这条缝上（relatedTarget 是空白，不在面板里），
+            //    于是"面板还没碰到就被关掉了" —— 之前用 relatedTarget 判断就是这个毛病。
+            // 改成【延迟关闭】：离开浮标或面板都只是"预约关闭"，300ms 内碰到另一个就把预约取消。
+            let noticeCloseTimer = null;
+            const cancelNoticeClose = () => {
+                if (noticeCloseTimer) { clearTimeout(noticeCloseTimer); noticeCloseTimer = null; }
+            };
+            const scheduleNoticeClose = () => {
+                cancelNoticeClose();
+                noticeCloseTimer = setTimeout(() => { noticeCloseTimer = null; closeNoticePanel(); }, 300);
+            };
             if (!isMobile) {
                 noticeBtn.addEventListener('mouseenter', () => {
+                    cancelNoticeClose();
                     openNoticePanel();
                 });
-                noticeBtn.addEventListener('mouseleave', (e) => {
-                    const relatedTarget = e.relatedTarget;
-                    if (relatedTarget && (noticePanel.contains(relatedTarget) || relatedTarget === noticePanel)) {
-                        return;
-                    }
-                    closeNoticePanel();
-                });
-                noticePanel.addEventListener('mouseleave', () => {
-                    closeNoticePanel();
-                });
+                noticeBtn.addEventListener('mouseleave', scheduleNoticeClose);
+                noticePanel.addEventListener('mouseenter', cancelNoticeClose);
+                noticePanel.addEventListener('mouseleave', scheduleNoticeClose);
             }
         }
+    }
+
+    // ⑦ 自定义解析接口（添加 / 保存 / 取消）
+    function bindCustomApiEvents(ctx) {
+        const { vipBox } = ctx;
         const addApiBtn = vipBox.querySelector("#add_api_btn");
         if (addApiBtn) {
             addApiBtn.addEventListener("click", function(e) {
@@ -1404,13 +1804,11 @@
                 const url = DOM_CACHE.apiUrlInput.value.trim();
                 const type = DOM_CACHE.apiTypeSelect.value;
                 if (!name || !url) {
-                    alert('请填写完整信息');
+                    alert('请填写接口名称和地址');
                     return;
                 }
-                if (!url.includes('?url=') && !url.includes('&url=')) {
-                    alert('接口地址必须包含 "?url=" 或 "&url=" 参数占位符');
-                    return;
-                }
+                // ⚠️ 这里【故意不校验地址格式】：参数名各家不一样（?url= / ?jx= / ?v= …），
+                //    强制要求某一种会把合法接口挡在外面。能不能用由使用者自行判断。
                 const newApi = { name, type, url };
                 customApis.push(newApi);
                 allApis = [...uniqueApis, ...customApis];
@@ -1420,11 +1818,9 @@
                 DOM_CACHE.apiTypeSelect.value = '1';
                 DOM_CACHE.addApiForm.style.display = "none";
                 renderApiLists();
+                renderCustomApiManage();   // 管理面板也要跟着刷新，否则删不掉刚加的那条
                 // 切回「VIP视频解析」标签页，让新接口立即可见（无需刷新）
-                vipBox.querySelectorAll(".tab-button").forEach(btn => btn.classList.remove("active"));
-                vipBox.querySelector('.tab-button[data-tab="vip"]').classList.add("active");
-                vipBox.querySelectorAll(".tab-content").forEach(content => content.classList.remove("active"));
-                vipBox.querySelector('#vip-tab').classList.add("active");
+                switchTab('vip');
                 Swal.fire({
                     title: '添加成功',
                     text: '自定义接口已添加，直接使用无需刷新！',
@@ -1443,9 +1839,49 @@
                 DOM_CACHE.addApiForm.style.display = "none";
             });
         }
+        // 「管理自定义接口」：和上面几个设置面板一样，互相排斥，点开一个关掉其余
+        const manageApiBtn = vipBox.querySelector("#manage_api_btn");
+        if (manageApiBtn && DOM_CACHE.customApiManage) {
+            manageApiBtn.addEventListener("click", function(e) {
+                e.stopPropagation();
+                const isVisible = DOM_CACHE.customApiManage.style.display === "block";
+                DOM_CACHE.addApiForm.style.display = 'none';
+                DOM_CACHE.styleSetPanel.style.display = 'none';
+                DOM_CACHE.shortcutSetPanel.style.display = 'none';
+                DOM_CACHE.autoParseSetPanel.style.display = 'none';
+                DOM_CACHE.customApiManage.style.display = isVisible ? "none" : "block";
+                if (!isVisible) renderCustomApiManage();   // 每次打开都重画一遍，避免看到过期内容
+            });
+        }
+        // 删一条自定义接口：改内存 → 存回去 → 重建解析列表 → 重画管理面板
+        if (DOM_CACHE.customApiManage) {
+            DOM_CACHE.customApiManage.addEventListener("click", (e) => {
+                const delBtn = e.target.closest('.custom-api-del');
+                if (!delBtn) return;
+                e.stopPropagation();
+                const ci = parseInt(delBtn.getAttribute('data-ci'), 10);
+                const api = customApis[ci];
+                if (!api) return;
+                if (!confirm('确定删除自定义接口「' + api.name + '」？')) return;
+                customApis.splice(ci, 1);
+                GM_setValue("custom_parse_apis", customApis);
+                allApis = [...uniqueApis, ...customApis];
+                renderApiLists();
+                renderCustomApiManage();
+            });
+        }
+    }
+
+    // ⑧ 解析接口列表里的点击（切模式 / 内嵌播放 / 弹窗打开）
+    function bindParseEvents(ctx) {
+        const { vipBox } = ctx;
         vipBox.querySelector('#vip-tab').addEventListener("click", (e) => {
-            if (e.target.classList.contains('mode-toggle')) {
-                togglePlayMode(e.target);
+            // 点「内嵌 / 弹窗」那两个字：只有【两种模式都支持】的接口才切得动（它有 data-modes）。
+            // 只有一种模式的跟它长得一样但点了不动（不靠手型提示），所以这里必须显式判断，
+            // 否则 togglePlayMode 会在 undefined 上 split(',') 直接抛错。
+            if (e.target.classList.contains('mode')) {
+                const owner = e.target.closest('.api-item');
+                if (owner && owner.dataset.modes) togglePlayMode(e.target);
                 return;
             }
             const apiItem = e.target.closest('.api-item');
@@ -1471,11 +1907,29 @@
                     updateAutoSwitchIcon(true, videoObj.name);
                 }
             } else {
-                const encodedUrl = encodeVideoUrl(window.location.href);
-                const parseUrl = videoObj.url + encodedUrl;
-                GM_openInTab(parseUrl, {active: true, insert: true, setParent: true});
+                // clean 的接口要"剥掉查询参数 + 不编码"（见 parseApis 里 66网1 的说明）
+                const tail = videoObj.clean
+                    ? String(window.location.href).split('#')[0].split('?')[0]
+                    : encodeVideoUrl(window.location.href);
+                const parseUrl = videoObj.url + tail;
+                // windowOpen 的接口要用 window.open：GM_openInTab 是扩展发起的标签，通常不带 Referer，
+                // 而个别站点要靠 Referer 才认参数。
+                // 用【具名窗口】而不是 '_blank'：同名窗口会被复用，避免每点一次就多留一个宿主页标签
+                // （标签堆积会让每个宿主页里的 iframe 抢不到连接，原因见 GATE_WIN_NAME 的注释）
+                let opened = false;
+                if (videoObj.windowOpen) {
+                    try { opened = !!window.open(parseUrl, GATE_WIN_NAME); } catch (e) { opened = false; }
+                }
+                if (!opened) {
+                    GM_openInTab(parseUrl, {active: true, insert: true, setParent: true});
+                }
             }
         });
+    }
+
+    // ⑨ 自动解析浮标开关
+    function bindAutoParseEvents(ctx) {
+        const { autoBtn, closeNoticePanel, consumeDragClick } = ctx;
         autoBtn.addEventListener("click", function(e) {
             e.stopPropagation();
             if (consumeDragClick()) return;
@@ -1532,6 +1986,11 @@
                 }, 1500);
             }
         });
+    }
+
+    // ⑩ 浮标拖拽（鼠标 + 触摸）
+    function bindDragEvents(ctx) {
+        const { vipBox, vipList, noticePanel, vipIcon, autoBtn, noticeBtn, vipIconImg, markDragClick } = ctx;
         const canStartFloatDrag = (target) => {
             if (vipList.contains(target)) return false;
             if (noticePanel && noticePanel.contains(target)) return false;
@@ -1575,7 +2034,8 @@
                 vipIconImg.src = VIP_ICON_GIF.idle;
             }
             if (floatDragMoved) {
-                suppressNextClick = true;
+                // 拖拽过 → 让后面那次补发的 click 被吞掉（原来直接改闭包变量，现在走 ctx）
+                markDragClick();
                 GM_setValue(CONFIG.panelPosKey, {
                     left: parseInt(vipBox.style.left, 10),
                     top: parseInt(vipBox.style.top, 10)
@@ -1624,8 +2084,6 @@
             document.addEventListener("touchend", onFloatDragEnd);
             document.addEventListener("touchcancel", onFloatDragEnd);
         }, { passive: true });
-        const autoIndex = GM_getValue(CONFIG.autoPlayerVal, 0);
-        updateAutoSwitchIcon(!!GM_getValue(CONFIG.autoPlayerKey, null), allApis[autoIndex] && allApis[autoIndex].name);
     }
 
     function clearVipPlaybackTimers() {
@@ -1702,21 +2160,16 @@
             stopPageMedia(this);
             return Promise.resolve();
         };
-        document.addEventListener('play', (event) => {
+        // 三个事件要做的动作完全一样：页面自己的 video/audio 一响就掐掉它（我们自己播放器里的放过）。
+        // 原来三个回调体一字不差地抄了三遍 —— 写成一个处理函数、循环绑定，完全等价。
+        const stopForeignMedia = (event) => {
             if (event.target instanceof HTMLMediaElement && !isInsideOurPlayer(event.target)) {
                 stopPageMedia(event.target);
             }
-        }, true);
-        document.addEventListener('playing', (event) => {
-            if (event.target instanceof HTMLMediaElement && !isInsideOurPlayer(event.target)) {
-                stopPageMedia(event.target);
-            }
-        }, true);
-        document.addEventListener('volumechange', (event) => {
-            if (event.target instanceof HTMLMediaElement && !isInsideOurPlayer(event.target)) {
-                stopPageMedia(event.target);
-            }
-        }, true);
+        };
+        ['play', 'playing', 'volumechange'].forEach(ev => {
+            document.addEventListener(ev, stopForeignMedia, true);
+        });
         try {
             HTMLMediaElement.prototype.play.toString = () => rawPlay.toString();
         } catch (e) {}
@@ -2014,6 +2467,7 @@
                 }
 
                 container.appendChild(iframeWrapper);
+
             })
             .catch(() => {
                 clearVipPlaybackTimers();
