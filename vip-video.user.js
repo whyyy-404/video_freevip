@@ -1,8 +1,8 @@
 // ==UserScript==
 // @name         🫧404小站 — 🎬VIP追剧神器 | 完全免费 | 支持多平台 | (电脑/手机/平板...自适应)
 // @namespace    https://scriptcat.org/zh-CN/users/162063
-// @version      3.3.7
-// @description  ▶在线VIP视频解析工具 (电脑/手机/平板...自适应) | free | 支持多平台【爱奇艺】【腾讯视频】【优酷土豆】【芒果TV】【乐视视频】【哔哩哔哩】【搜狐视频】等常见平台。✨10条解析接口实测可用 ✨内嵌播放无广告 ✨智能切集追剧 ✨内嵌铺满原播放区 ✨一键自动解析  制作不易，有问题可加微信咨询：Why15236444193 [如果加微信未能及时回复，请多多包涵哈！]
+// @version      3.3.8
+// @description  ▶在线VIP视频解析工具 (电脑/手机/平板...自适应) | free | 支持多平台【爱奇艺】【腾讯视频】【优酷土豆】【芒果TV】【乐视视频】【哔哩哔哩】【搜狐视频】等常见平台。✨9条解析接口实测可用 ✨内嵌播放无广告 ✨智能切集追剧 ✨内嵌铺满原播放区 ✨一键自动解析  制作不易，有问题可加微信咨询：Why15236444193 [如果加微信未能及时回复，请多多包涵哈！]
 // @author       yyy404
 // @match        *://*/*
 // @grant        GM_registerMenuCommand
@@ -164,7 +164,7 @@
     // 接口 / 条目的文字颜色标记（想换颜色只改这里）
     // 规律：同一家的条目，不管出现在哪个列表里，都用同一个 mark —— 这样一眼能认出是同一家。
     //   txnp    = txnp.cn 一家（紫红）：解析接口 TXNQ(bfq.) / 酥皮(art.) ＋ 搜索跳转 txnp搜索
-    //   qilin   = 66网 / 麒麟（蓝绿）：解析接口 66网1·66网2·66网3·麒麟1 ＋ 搜索跳转 66网1片库搜索
+    //   qilin   = 66网 / 麒麟（蓝绿）：解析接口 66网1·66网2·麒麟1 ＋ 搜索跳转 66网1片库搜索
     //   wsyzy   = 无损云（天蓝）：主站 wsyzy.cc / 采集接口 api.wsyzy.net ＋ 搜索跳转 无损云搜索
     //   eco     = EcoHub（橙）：搜索跳转 EcoHub站
     //   ikanbot = 爱看机器人（黄）：搜索跳转 爱看机器人
@@ -189,23 +189,20 @@
     };
 
     const parseApis = [
-        // ===== 解析接口【只保留已实测可用的 10 条】=====
-        // 这 10 条都是逐条实测确认可用的；历史上删掉的失效条目不再收录。
+        // ===== 解析接口【只保留已实测可用的 9 条】=====
+        // 这 9 条都是逐条实测确认可用的；历史上删掉的失效条目不再收录。
         // ⚠️ 排列规则：同一家的（同色）挨在一起，且【家族顺序跟搜索跳转一致】
         //    （见 API_MARK_COLOR 的声明顺序）。TXNQ 那家排最前，因为它是实测里最好用的。
         {"name": "TXNQ", "type": "1,3", "url": "https://bfq.txnp.cn/player?url=", "mark": "txnp"},
         {"name": "酥皮", "type": "1,3", "url": "https://art.txnp.cn/?url=", "mark": "txnp"},
-        // ===== 66大片网 / 麒麟 这一家的四个解析入口（同色 = 同一家）=====
-        // 命名：66网1/2/3 = 走 66大片网 的三个入口；麒麟1 = 麒麟自己的接口域名。
+        // ===== 66大片网 / 麒麟 这一家的三个解析入口（同色 = 同一家）=====
+        // 命名：66网1/2 = 走 66大片网 的两个入口；麒麟1 = 麒麟自己的接口域名。
         // 66网1：站内跳转入口（= 授权宿主页）。需要"剥 query + 不编码"的形态，所以打 clean 标记
         {"name": "66网1", "type": "3", "url": "https://www.66dpw.vip/?url=", "mark": "qilin", "clean": true, "windowOpen": true},
         // 66网2：独立解析页（内部再嵌真正的接口）。内嵌会被域名授权挡住
         {"name": "66网2", "type": "3", "url": "https://www.66dpw.vip/88888888/jiexi.html?url=", "mark": "qilin"},
-        // 66网3：66网2 内部真正调用的接口（域名是 qlplayer.cyou，不在 66dpw 上，但它是 66网 那条链的终点）。
-        //   直连的内嵌模式曾被域名授权挡，弹窗模式尚未验证
-        {"name": "66网3", "type": "3", "url": "https://svip.qlplayer.cyou/?url=", "mark": "qilin"},
-        // 麒麟1：麒麟的另一个接口域名，来自「别人的」3.2.9。实测 title 与 66网3 相同（都是「麒麟视频播放器」）。
-        // ⚠️ type 用 "1,3" 是故意的：66网2/66网3 内嵌被域名授权挡所以只敢写 "3"；这条静态检查没发现拦截，
+        // 麒麟1：麒麟的另一个接口域名，来自「别人的」3.2.9。实测 title 是「麒麟视频播放器」。
+        // ⚠️ type 用 "1,3" 是故意的：66网2 内嵌被域名授权挡所以只敢写 "3"；这条静态检查没发现拦截，
         //    但静态查不出运行时的域名授权 ⇒ 写 "1,3" 让界面上能【一键切内嵌/弹窗】自己试。
         {"name": "麒麟1", "type": "1,3", "url": "https://free.maccms.xyz/?url=", "mark": "qilin"},
         // 邦宁：解析结果特殊，所以单独一个颜色。放在最后 —— 原来紧跟 66网那组（蓝绿）之后、
@@ -251,7 +248,7 @@
             <br>&nbsp;&nbsp;5、<b>自动解析</b>：先在「自动解析设置」选接口，再点发呆熊/跳熊浮标开关
             <br>&nbsp;&nbsp;6、<b>快捷键</b>：Alt+V 呼出/隐藏，Alt+R 刷新接口，Alt+S 样式设置
             <br>&nbsp;&nbsp;7、<b>关闭解析</b>：点击播放器右上角 × 刷新页面恢复原视频（手机端点浮标即可开关面板）
-            <br>&nbsp;&nbsp;<span style="color:#7dd3fc;"><b>8、404小站 - 影视交流 QQ 群</b>：后面出</span>
+            <br>&nbsp;&nbsp;<span style="color:#7dd3fc;"><b>8、404极阴岛 QQ 群</b>：725752181</span>
         </div>`;
 
     function updateAutoSwitchIcon(enabled, apiName) {
@@ -526,6 +523,8 @@
         #${CONFIG.vipBoxId} .api-must-read .qq,
         #${CONFIG.vipBoxId} .api-must-read .qq b { color: #7dd3fc; }
         #${CONFIG.vipBoxId} .api-must-read .mr-title { color: #7dd3fc; font-weight: bold; }
+        /* 标题里那个怒脸单独给红色；「👉必看说明：」继承 .mr-title 的蓝色不变 */
+        #${CONFIG.vipBoxId} .api-must-read .mr-title .mr-angry { color: #ff4d4d; }
         #${CONFIG.vipBoxId} .vip_list.visible li {
             opacity: 1;
             transform: translateY(0);
@@ -784,7 +783,7 @@
             text-align: center;
             padding: 2px 0;
         }
-        /* 自定义接口在解析列表里的记号：中性灰蓝，不占用 7 个家族色 */
+        /* 自定义接口在解析列表里的记号：中性灰蓝，不占用 6 个家族色 */
         #${CONFIG.vipBoxId} .api-custom-mark {
             color: #9fb3c8;
             font-weight: bold;
@@ -991,7 +990,7 @@
         // 写在模板里的东西会被冲掉（加自定义接口、切样式都会触发它）。
         complexApisHtml += `
             <div class="api-must-read">
-                <span class="mr-title">(╬▔皿▔)╯👉必看说明：</span>
+                <span class="mr-title"><span class="mr-angry">(╬▔皿▔)╯</span>👉必看说明：</span>
                 <br>&nbsp;&nbsp;1、本脚本为开源项目，完全免费，请勿上当受骗
                 <br>&nbsp;&nbsp;2、请勿轻信任何广告，请谨慎辨别！
                 <br>&nbsp;&nbsp;3、如遇卡顿 / 无法加载，可切换不同线路 / 使用海外网络观看
