@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         🫧404小站 — 🎬VIP追剧神器 | 完全免费 | 支持多平台 | (电脑/手机/平板...自适应)
 // @namespace    https://scriptcat.org/zh-CN/users/162063
-// @version      3.3.8
+// @version      3.3.9
 // @description  ▶在线VIP视频解析工具 (电脑/手机/平板...自适应) | free | 支持多平台【爱奇艺】【腾讯视频】【优酷土豆】【芒果TV】【乐视视频】【哔哩哔哩】【搜狐视频】等常见平台。✨9条解析接口实测可用 ✨内嵌播放无广告 ✨智能切集追剧 ✨内嵌铺满原播放区 ✨一键自动解析  制作不易，有问题可加微信咨询：Why15236444193 [如果加微信未能及时回复，请多多包涵哈！]
 // @author       yyy404
 // @match        *://*/*
@@ -201,7 +201,7 @@
         {"name": "66网1", "type": "3", "url": "https://www.66dpw.vip/?url=", "mark": "qilin", "clean": true, "windowOpen": true},
         // 66网2：独立解析页（内部再嵌真正的接口）。内嵌会被域名授权挡住
         {"name": "66网2", "type": "3", "url": "https://www.66dpw.vip/88888888/jiexi.html?url=", "mark": "qilin"},
-        // 麒麟1：麒麟的另一个接口域名，来自「别人的」3.2.9。实测 title 是「麒麟视频播放器」。
+        // 麒麟1：麒麟的另一个接口域名。实测 title 是「麒麟视频播放器」。
         // ⚠️ type 用 "1,3" 是故意的：66网2 内嵌被域名授权挡所以只敢写 "3"；这条静态检查没发现拦截，
         //    但静态查不出运行时的域名授权 ⇒ 写 "1,3" 让界面上能【一键切内嵌/弹窗】自己试。
         {"name": "麒麟1", "type": "1,3", "url": "https://free.maccms.xyz/?url=", "mark": "qilin"},
@@ -248,7 +248,7 @@
             <br>&nbsp;&nbsp;5、<b>自动解析</b>：先在「自动解析设置」选接口，再点发呆熊/跳熊浮标开关
             <br>&nbsp;&nbsp;6、<b>快捷键</b>：Alt+V 呼出/隐藏，Alt+R 刷新接口，Alt+S 样式设置
             <br>&nbsp;&nbsp;7、<b>关闭解析</b>：点击播放器右上角 × 刷新页面恢复原视频（手机端点浮标即可开关面板）
-            <br>&nbsp;&nbsp;<span style="color:#7dd3fc;"><b>8、404极阴岛 QQ 群</b>：725752181</span>
+            <br>&nbsp;&nbsp;<span style="color:#7dd3fc;"><b>8、404极阴岛 QQ 群</b>：<span style="font-size:12px;">725752181</span></span>
         </div>`;
 
     function updateAutoSwitchIcon(enabled, apiName) {
@@ -961,7 +961,7 @@
             // 名字和 title 一律过 escapeAttr：自定义的名字是手输的，
             // 里面若有 " 或 < 会把属性/标签结构弄坏
             const safeName = escapeAttr(name);
-            const titleAttr = escapeAttr(isCustom ? name + '（自定义接口）' : name);
+            const titleAttr = escapeAttr(name + '：' + (item.url || '') + (isCustom ? '（自定义接口）' : ''));
             // 「模式」那一列只有三种情况，一个类 .mode 就够：
             //   ① 同时支持 1 和 3 → 两种模式都能用，那个字可点着切（靠 data-modes 认出来）
             //   ② 只支持 1        → 只能内嵌
