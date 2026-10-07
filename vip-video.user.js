@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         🫧404小站 — 🎬VIP追剧神器 | 完全免费 | 支持多平台 | (电脑/手机/平板...自适应)
 // @namespace    https://scriptcat.org/zh-CN/users/162063
-// @version      3.3.9
+// @version      3.5.0
 // @description  ▶在线VIP视频解析工具 (电脑/手机/平板...自适应) | free | 支持多平台【爱奇艺】【腾讯视频】【优酷土豆】【芒果TV】【乐视视频】【哔哩哔哩】【搜狐视频】等常见平台。✨9条解析接口实测可用 ✨内嵌播放无广告 ✨智能切集追剧 ✨内嵌铺满原播放区 ✨一键自动解析  制作不易，有问题可加微信咨询：Why15236444193 [如果加微信未能及时回复，请多多包涵哈！]
 // @author       yyy404
 // @match        *://*/*
@@ -10,6 +10,10 @@
 // @grant        GM_getValue
 // @grant        GM_setValue
 // @grant        GM_openInTab
+// @grant        GM_xmlhttpRequest
+// @resource     hlsJs       https://cdn.jsdelivr.net/npm/hls.js@1.7.3/dist/hls.min.js
+// @resource     artPlayerJs https://cdn.jsdelivr.net/npm/artplayer@5.4.0/dist/artplayer.js
+// @grant        GM_getResourceText
 // @connect      *
 // @require      https://cdn.jsdelivr.net/npm/sweetalert2@11
 // @run-at       document-start
@@ -161,23 +165,24 @@
         window.addEventListener('load', dropOthers, { once: true });
     }
 
-    // 接口 / 条目的文字颜色标记（想换颜色只改这里）
-    // 规律：同一家的条目，不管出现在哪个列表里，都用同一个 mark —— 这样一眼能认出是同一家。
-    //   txnp    = txnp.cn 一家（紫红）：解析接口 TXNQ(bfq.) / 酥皮(art.) ＋ 搜索跳转 txnp搜索
-    //   qilin   = 66网 / 麒麟（蓝绿）：解析接口 66网1·66网2·麒麟1 ＋ 搜索跳转 66网1片库搜索
-    //   wsyzy   = 无损云（天蓝）：主站 wsyzy.cc / 采集接口 api.wsyzy.net ＋ 搜索跳转 无损云搜索
-    //   eco     = EcoHub（橙）：搜索跳转 EcoHub站
-    //   ikanbot = 爱看机器人（黄）：搜索跳转 爱看机器人
-    //   special = 邦宁（朱红）：解析结果特殊
+    // 接口 / 条目的底色标记（想换颜色只改这里）
+    // 规律：同一家的条目，不管在哪个标签页，都用同一个 mark —— 这样一眼能认出是同一家。
+    //   special = 邦宁（红）：解析结果特殊
+    //   qilin   = 66网 / 麒麟（绿）：同一家的全部入口 ——
+    //             解析接口 66网1·66网2·麒麟1 ＋ 搜索跳转 66网1片库搜索 ＋ 导航 66大片网
+    //   wsyzy   = 无损云（蓝）：主站 wsyzy.cc / 采集接口 api.wsyzy.net —— 采集源 + 搜索跳转 + 导航 三处同色
+    //   txnp    = txnp.cn 一家（紫）：解析接口 TXNQ(bfq.) / 酥皮(art.) + 搜索跳转 cms.txnp.cn + 导航 cms.txnp.cn
+    //   lxyy    = 洛雪TV（橙）：导航页（目前只有这一条）
     // ⚠️ 这是【文字颜色】，不是底色 —— 只给名字上色，不铺背景（铺背景会"顶眼睛"，看久了不舒服）。
     //    所以用实色 hex（不要带透明度）：文字色一旦半透明就会发灰、看不清。
     //    底色是深灰 #2c2e34，所以这些颜色都偏亮 —— 亮色在深底上才读得清。
-    // ⚠️ 排列规则：同一家（同色）必须挨在一起，而且【各列表的家族顺序必须一致】——
-    //    下面这个声明顺序就是家族顺序，解析接口和搜索跳转都按它排。
+    // ⚠️ 排列规则：同一家（同色）必须挨在一起，而且【三个分区的家族顺序必须一致】——
+    //    下面这个声明顺序就是家族顺序：导航页 / 搜索跳转 / 解析接口 都按它排。
+    //    ①②③④⑤ 在三个分区里顺序完全相同，看熟一个分区就够了。
     // ⚠️ 配色尽量照顾色觉障碍（红绿色弱最常见）：
-    //    ① 不用纯红+纯绿这一对（红绿色弱下会混成相近的黄褐色）⇒ 66网一家用【蓝绿 teal】
+    //    ① 不用纯红+纯绿这一对（红绿色弱下会混成相近的黄褐色）⇒ 66网一家改用【蓝绿 teal】
     //    ② 靠色相之余也拉开明度（黄最亮、粉次之、朱红/橙居中）
-    //    ③ 但 6 家颜色不可能两两都被所有色觉类型分辨。颜色在这里只是【辅助分组】——
+    //    ③ 但要说实话：7 家颜色不可能两两都被所有色觉类型分辨。颜色在这里只是【辅助分组】——
     //       名字就写在旁边，不靠颜色也能用，所以不影响功能。
     const API_MARK_COLOR = {
         txnp: '#c9a0f0',      // ① 紫红 —— txnp.cn 一家（TXNQ / 酥皮 / txnp搜索 / cms.txnp.cn）
@@ -185,13 +190,14 @@
         wsyzy: '#5cb8ff',     // ③ 天蓝 —— 无水印资源网 / 无损云
         eco: '#ffa64d',       // ④ 橙  —— EcoHub 一家
         ikanbot: '#f5e05a',   // ⑤ 黄  —— 爱看机器人（明度最高，最跳）
+        lxyy: '#ff8fb0',      // ⑥ 粉  —— 洛雪TV
         special: '#ff6b4a'    // ⑦ 朱红 —— 邦宁（原来跟纯绿挨着，现在绿已改蓝绿）
     };
 
     const parseApis = [
         // ===== 解析接口【只保留已实测可用的 9 条】=====
         // 这 9 条都是逐条实测确认可用的；历史上删掉的失效条目不再收录。
-        // ⚠️ 排列规则：同一家的（同色）挨在一起，且【家族顺序跟搜索跳转一致】
+        // ⚠️ 排列规则：同一家的（同色）挨在一起，且【家族顺序跟导航页 / 搜索跳转一致】
         //    （见 API_MARK_COLOR 的声明顺序）。TXNQ 那家排最前，因为它是实测里最好用的。
         {"name": "TXNQ", "type": "1,3", "url": "https://bfq.txnp.cn/player?url=", "mark": "txnp"},
         {"name": "酥皮", "type": "1,3", "url": "https://art.txnp.cn/?url=", "mark": "txnp"},
@@ -368,6 +374,16 @@
         apiNameInput: null,
         apiUrlInput: null,
         apiTypeSelect: null,
+        // ===== 采集源 / 导航 标签页 =====
+        collectTab: null,
+        navTab: null,
+        collectKeyword: null,
+        collectFilterChk: null,
+        collectStatus: null,
+        collectSources: null,
+        collectEpisodes: null,
+        collectOutput: null,
+        navLinks: null
     };
 
     // 全局播放器控制
@@ -683,11 +699,26 @@
         #${CONFIG.vipBoxId} .tab-content.active {
             display: block;
         }
+        /* ===== 采集源页内嵌播放器（阶段3） ===== */
+        #${CONFIG.vipBoxId} .collect-player-wrap {
+            margin-top: 6px;
+        }
+        #${CONFIG.vipBoxId} .collect-player-bar {
+            display: flex;
+            align-items: center;
+            gap: 6px;
+            font-size: 11px;
+            margin-bottom: 4px;
+            text-align: left;
+        }
         /* ===== 共用的表单外观 =====
-           输入框(input/select)和主按钮的外观在多个标签页里反复出现、属性值一模一样，
+           输入框(input/select)和主按钮的外观在 4 个标签页里反复出现、属性值一模一样，
            这里集中写一份；下面各规则只留自己特有的（padding / font-size / width 等）。
            ⚠️ 顺序要求：这条必须在各具体规则【之前】—— 选择器同优先级时，靠后的才盖得住。
            ⚠️ .add-api-form .cancel-btn 改的是背景色，它选择器更具体，不受这条影响。 */
+        #${CONFIG.vipBoxId} .collect-player-bar select,
+        #${CONFIG.vipBoxId} .collect-search input,
+        #${CONFIG.vipBoxId} .collect-url-row input,
         #${CONFIG.vipBoxId} .add-api-form input,
         #${CONFIG.vipBoxId} .add-api-form select,
         #vip-style-set-panel input,
@@ -698,12 +729,278 @@
             background-color: #2c2e34;
             color: #ccc;
         }
+        #${CONFIG.vipBoxId} .collect-player-bar button,
+        #${CONFIG.vipBoxId} .collect-search button,
+        #${CONFIG.vipBoxId} .collect-url-row button,
         #${CONFIG.vipBoxId} .add-api-form button {
             border: none;
             border-radius: 3px;
             background-color: #1c84c6;
             color: #fff;
             cursor: pointer;
+        }
+        #${CONFIG.vipBoxId} .collect-player-bar select {
+            padding: 2px 4px;
+            font-size: 11px;
+        }
+        #${CONFIG.vipBoxId} .collect-player-bar button {
+            padding: 3px 10px;
+            font-size: 11px;
+        }
+        /* ===== 采集源标签页 ===== */
+        #${CONFIG.vipBoxId} .collect-search {
+            display: flex;
+            gap: 6px;
+            padding: 6px 10px 0 10px;
+        }
+        #${CONFIG.vipBoxId} .collect-search input {
+            flex: 1;
+            min-width: 0;
+            padding: 6px;
+            font-size: 12px;
+        }
+        #${CONFIG.vipBoxId} .collect-search button {
+            padding: 6px 12px;
+            font-size: 12px;
+            white-space: nowrap;
+        }
+        #${CONFIG.vipBoxId} .collect-filter-row {
+            padding: 4px 10px 0 10px;
+            font-size: 11px;
+            text-align: left;
+            line-height: 1.5;
+        }
+        #${CONFIG.vipBoxId} .collect-filter-row label {
+            cursor: pointer;
+            user-select: none;
+        }
+        #${CONFIG.vipBoxId} .collect-status {
+            padding: 4px 10px;
+            font-size: 11px;
+            opacity: 1;
+            text-align: left;
+            line-height: 1.4;
+        }
+        /* 没有内容时整块不占位 —— 否则它会带着 padding 撑出一截空白 */
+        #${CONFIG.vipBoxId} .collect-status:empty {
+            display: none;
+        }
+        #${CONFIG.vipBoxId} .collect-sources {
+            max-height: 300px;
+            overflow-y: auto;
+        }
+        /* 功能/来源 两级分区标题 */
+        #${CONFIG.vipBoxId} .collect-sec {
+            font-size: 12px;
+            font-weight: bold;
+            text-align: left;
+            padding: 5px 10px 0 10px;
+            opacity: 1;
+        }
+        /* 「← 返回命中列表」：只在命中多部时出现（见 renderCollectEpisodeList）。
+           命中列表和剧集列表渲染进同一个容器，展开剧集会把列表覆盖掉 —— 这个按钮让人退回去换一部。 */
+        #${CONFIG.vipBoxId} .collect-back {
+            display: inline-block;
+            font-size: 11px;
+            padding: 3px 8px;
+            margin: 5px 0 1px 10px;
+            border: 1px solid #1c84c6;
+            border-radius: 2px;
+            color: #7dd3fc;
+            cursor: pointer;
+            opacity: 1;
+        }
+        #${CONFIG.vipBoxId} .collect-back:hover {
+            background: rgba(28, 132, 198, 0.25);
+        }
+        #${CONFIG.vipBoxId} .collect-src-title {
+            font-size: 10px;
+            text-align: left;
+            padding: 4px 10px 2px 10px;
+            opacity: 0.7;
+        }
+        /* 采集源标签页顶部那条「晚上容易卡」的提示：居中、颜色不解淡（opacity:1 且用暖色，别让它糊成一团浅灰） */
+        #${CONFIG.vipBoxId} .collect-night-note {
+            font-size: 11px;
+            text-align: center;
+            padding: 6px 8px 2px 8px;
+            color: #ffcf6b;
+            opacity: 1;
+            line-height: 1.5;
+        }
+        #${CONFIG.vipBoxId} .collect-src-title.warn {
+            color: #ff6b6b;
+            opacity: 1;
+            font-weight: bold;
+        }
+        #${CONFIG.vipBoxId} .collect-src-list {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 4px;
+            padding: 0 10px 4px 10px;
+            max-height: 150px;
+            overflow-y: auto;
+        }
+        #${CONFIG.vipBoxId} .collect-src-item {
+            font-size: 11px;
+            line-height: 20px;
+            box-sizing: border-box;
+            width: calc(33.33% - 4px);
+            padding: 0 6px;
+            text-align: center;
+            border: 1px solid gray;
+            border-radius: 2px;
+            cursor: pointer;
+            overflow: hidden;
+            white-space: nowrap;
+            text-overflow: ellipsis;
+        }
+        #${CONFIG.vipBoxId} .collect-src-item:hover {
+            background: rgba(28, 132, 198, 0.15);
+            border-color: #1c84c6;
+        }
+        #${CONFIG.vipBoxId} .collect-src-item.selected {
+            background: #075985 !important;
+            color: #fff;
+            border-color: #7dd3fc;
+        }
+        /* 实测不可用的源：虚线边框 + 变暗，但仍可点击复测 */
+        #${CONFIG.vipBoxId} .collect-src-item.bad {
+            border-style: dashed;
+            opacity: 0.7;
+        }
+        #${CONFIG.vipBoxId} .collect-hint {
+            font-size: 10px;
+            opacity: 0.85;
+            margin-left: 6px;
+        }
+        #${CONFIG.vipBoxId} .collect-result-list {
+            max-height: 220px;
+            overflow-y: auto;
+            padding: 0 10px;
+        }
+        #${CONFIG.vipBoxId} .collect-result-item {
+            font-size: 12px;
+            text-align: left;
+            padding: 5px 6px;
+            margin: 4px 0;
+            border: 1px solid gray;
+            border-radius: 2px;
+            cursor: pointer;
+            overflow: hidden;
+            white-space: nowrap;
+            text-overflow: ellipsis;
+        }
+        #${CONFIG.vipBoxId} .collect-result-item:hover {
+            background: rgba(28, 132, 198, 0.15);
+            border-color: #1c84c6;
+        }
+        #${CONFIG.vipBoxId} .collect-result-item.selected {
+            background: #075985;
+            color: #fff;
+            border-color: #7dd3fc;
+        }
+        #${CONFIG.vipBoxId} .collect-result-item .collect-meta {
+            font-size: 10px;
+            opacity: 0.75;
+            margin-left: 4px;
+        }
+        #${CONFIG.vipBoxId} .collect-episodes {
+            max-height: 220px;
+            overflow-y: auto;
+            padding: 0 10px 6px 10px;
+        }
+        #${CONFIG.vipBoxId} .collect-ep-list {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 4px;
+        }
+        #${CONFIG.vipBoxId} .collect-route-name {
+            font-size: 10px;
+            text-align: left;
+            opacity: 0.75;
+            margin: 6px 0 3px 0;
+        }
+        #${CONFIG.vipBoxId} .collect-ep {
+            font-size: 11px;
+            line-height: 20px;
+            box-sizing: border-box;
+            width: calc(33.33% - 4px);
+            padding: 0 4px;
+            text-align: center;
+            border: 1px solid gray;
+            border-radius: 2px;
+            cursor: pointer;
+            overflow: hidden;
+            white-space: nowrap;
+            text-overflow: ellipsis;
+        }
+        #${CONFIG.vipBoxId} .collect-ep:hover {
+            background: rgba(28, 132, 198, 0.15);
+            border-color: #1c84c6;
+        }
+        #${CONFIG.vipBoxId} .collect-ep.selected {
+            background: #075985;
+            color: #fff;
+            border-color: #7dd3fc;
+        }
+        #${CONFIG.vipBoxId} .collect-output {
+            padding: 0 10px 6px 10px;
+        }
+        #${CONFIG.vipBoxId} .collect-url-row {
+            text-align: left;
+            margin-top: 4px;
+        }
+        #${CONFIG.vipBoxId} .collect-url-src {
+            display: block;
+            font-size: 10px;
+            opacity: 0.75;
+            margin-bottom: 3px;
+        }
+        #${CONFIG.vipBoxId} .collect-url-row input {
+            width: 100%;
+            box-sizing: border-box;
+            padding: 5px;
+            font-size: 11px;
+        }
+        #${CONFIG.vipBoxId} .collect-url-row button {
+            margin-top: 4px;
+            padding: 5px 14px;
+            font-size: 12px;
+        }
+        /* ===== 导航标签页 ===== */
+        #${CONFIG.vipBoxId} .nav-list {
+            padding: 0 10px;
+            max-height: 300px;
+            overflow-y: auto;
+        }
+        #${CONFIG.vipBoxId} .nav-item {
+            display: block;
+            text-align: left;
+            padding: 7px 8px;
+            margin: 5px 0;
+            border: 1px solid gray;
+            border-radius: 3px;
+            cursor: pointer;
+            font-size: 12px;
+            line-height: 1.5;
+        }
+        #${CONFIG.vipBoxId} .nav-item:hover {
+            background: rgba(28, 132, 198, 0.15);
+            border-color: #1c84c6;
+        }
+        #${CONFIG.vipBoxId} .nav-item .nav-desc {
+            display: block;
+            font-size: 11px;
+            opacity: 0.92;
+            margin-top: 3px;
+        }
+        #${CONFIG.vipBoxId} .nav-item .nav-url {
+            display: block;
+            font-size: 10px;
+            opacity: 0.7;
+            margin-top: 2px;
+            word-break: break-all;
         }
         #${CONFIG.vipBoxId} .add-api-form {
             padding: 10px;
@@ -783,7 +1080,7 @@
             text-align: center;
             padding: 2px 0;
         }
-        /* 自定义接口在解析列表里的记号：中性灰蓝，不占用 6 个家族色 */
+        /* 自定义接口在解析列表里的记号：中性灰蓝，不占用 7 个家族色 */
         #${CONFIG.vipBoxId} .api-custom-mark {
             color: #9fb3c8;
             font-weight: bold;
@@ -901,6 +1198,189 @@
         return encodeURIComponent(url).replace(/%20/g, '+');
     }
 
+    // ===================================================================
+    // ===== 采集源页（功能 × 来源 两级分区）=====
+    // 请求方式：接口地址 + ?ac=detail&wd=剧名  →  返回 JSON（vod_play_url 里是 .m3u8）
+    // fmt 说明：
+    //   maccms10 = 苹果CMS v10（ac=detail）
+    //   maccms8  = 苹果CMS v8（ac=videolist）
+    //   custom   = 非标准路径，按模板拼（{kw} 替换剧名）
+    //   search   = 不是接口，直接用剧名拼好 URL 打开新标签
+    //   jump     = 强制跳转：用【当前视频页地址】拼好 URL 打开新标签
+    //   random   = 随机组合源（从 pool 里随机挑一个真源来搜）
+    //   link     = 不是接口，点开新标签（用于纯外链型条目）
+    //   info     = 纯展示，不可点（没有可用地址的条目）
+    // 裸域名会由 normalizeCollectApi() 自动补 /api.php/provide/vod/
+    // 数据来源：公开渠道整理的采集接口清单 + EcoHub + 18+.json
+    // v 字段 = 可用性备注（部分条目在浏览器之外的环境取不到数据，以实际点开的结果为准）
+    // ===================================================================
+    const COLLECT_GROUPS = [
+        // 四个分区：采集源 / EcoHub / 搜索跳转 / 其他。
+        // 每个来源【内部】再按实测结果分子类，从「好用」排到「没用」。
+        // ⚠️ 各条的 v 记的是【最近一次实测】的状态，不是永久结论：
+        //    采集站的可用性会波动（站长带宽、限流、间歇宕机），同一个源两次测出不同结果是常态。
+        //    复测后只需改子类归属和 v，顶层分区不用动。
+        {
+            sec: '采集源', src: '推荐 · 随机挑一个',
+            items: [
+                { name: '日常', api: '', fmt: 'random', pool: 'auto' }
+            ]
+        },
+        {
+            sec: '采集源', src: '✅ 可用',
+            items: [
+                { name: '期颐', api: 'https://iqiyizyapi.com/api.php/provide/vod/from/iqym3u8', fmt: 'maccms10', hit: true },
+                { name: '巨量', api: 'https://api.juliang.live/api/provide/vod', fmt: 'maccms10', hit: true },
+                { name: '天堂', api: 'http://caiji.dyttzyapi.com', fmt: 'maccms10', hit: true },
+                { name: '豪华', api: 'https://hhzyapi.com', fmt: 'maccms10', hit: true },
+                { name: '西瓜', api: 'https://caiji.xgzyapi.com', fmt: 'maccms10', hit: true },
+                { name: '极速', api: 'https://jszyapi.com', fmt: 'maccms10', hit: true },
+                { name: '虎牙', api: 'https://www.huyaapi.com', fmt: 'maccms10', hit: true },
+                { name: '百度', api: 'https://api.apibdzy.com', fmt: 'maccms10', hit: true },
+                { name: '量子', api: 'https://cj.lziapi.com', fmt: 'maccms10', hit: true },
+                { name: '最大', api: 'https://api.zuidapi.com', fmt: 'maccms10', hit: true },
+                { name: '无忧', api: 'https://www.wyvod.com', fmt: 'maccms10', hit: true },
+                { name: '魔都', api: 'https://caiji.moduapi.cc', fmt: 'maccms10', hit: true },
+                { name: '魔都2', api: 'https://caiji.moduapi.cc/api.php/provide/vod/from/modum3u8', fmt: 'maccms10', hit: true },
+                // 下面两条和 EcoHub 分区里的「速博(SUBO)」「非凡(FF)」同源，两边都保留。
+                // ⚠️ 与 EcoHub 分区的「速博(SUBO)」「非凡(FF)」同源，这两条的 v 里已写明，悬停可见。
+                { name: '速播', api: 'https://subocj.com', fmt: 'maccms10', hit: true },
+                { name: '非凡', api: 'http://api.ffzyapi.com', fmt: 'maccms10', hit: true }
+            ]
+        },
+        {
+            // 和上面「✅ 可用」是同一类结果（直连就能搜到），单独成组只因为【形状不同】：
+            //   它搜索只返回视频 ID，播放地址要再按 ID 问一次详情 ⇒ 多一次请求，稍慢。
+            // 这是【格式】差异，不是【策略】：对方没有拒绝我们，只是话不一样。
+            sec: '采集源', src: '✅ 可用 · 稍慢',
+            items: [
+                { name: '沃云', api: 'http://zhibo.jishuwo.com/api/so/index.php?wd={kw}', fmt: 'woyun', detail: 'http://zhibo.jishuwo.com/api/so/index.php?ac=detail&id={id}', hit: true }
+            ]
+        },
+        {
+            sec: '采集源', src: '⚠️ 可用，代理稍慢',
+            items: [
+                { name: '酷播', api: 'https://api.yzzy-api.com/inc/apijson.php', fmt: 'maccms10' },
+                { name: '如意', api: 'https://cj.rycjapi.com', fmt: 'maccms10' },
+                { name: 'U酷', api: 'https://api.ukuapi.com', fmt: 'maccms10' },
+                { name: '爱坤', api: 'http://www.ikunzy.com', fmt: 'maccms10' }
+            ]
+        },
+        {
+            // 和上面「✅ 可用」是同一类结果（都能搜到），分开只是因为机制不同：
+            //   这些站点禁用了关键词搜索，脚本识别到之后会自动改走「联想接口 + 按 ID 取详情」
+            // 识别信号有两种形态，两种都处理：
+            //   一种是把拒绝包成 JSON 错误码返回，另一种是直接回一句纯文本
+            sec: '采集源', src: '✅ 可用 · 自动换接口',
+            items: [
+                { name: '茅台', api: 'https://caiji.maotaizy.cc', fmt: 'maccms10' },
+                { name: '天涯', api: 'https://tyyszyapi.com', fmt: 'maccms10' },
+                { name: '牛牛', api: 'https://api.niuniuzy.me', fmt: 'maccms10' },
+                { name: '丫丫', api: 'https://cj.yayazy.net', fmt: 'maccms10' },
+                { name: 'OK', api: 'http://api.okzyw.net', fmt: 'maccms10' },
+                { name: '无损云', api: 'https://api.wsyzy.net', fmt: 'maccms10', mark: 'wsyzy' }
+            ]
+        },
+        {
+            sec: 'EcoHub', src: '✅ 可用',
+            items: [
+                { name: '默认', api: 'https://jinyingzy.com/api.php/provide/vod', fmt: 'maccms10', hit: true },
+                { name: '速博(SUBO)', api: 'https://subocaiji.com/api.php/provide/vod', fmt: 'maccms10', hit: true },
+                { name: '金鹰2(JY)', api: 'https://jyzyapi.com/api.php/provide/vod', fmt: 'maccms10', hit: true },
+                { name: '非凡(FF)', api: 'http://cj.ffzyapi.com/api.php/provide/vod/', fmt: 'maccms10', hit: true },
+                { name: 'HD(LY)', api: 'https://360zy.com/api.php/provide/vod/at/json', fmt: 'maccms10', hit: true },
+                { name: 'U酷(UKU)', api: 'https://api.ukuapi88.com/api.php/provide/vod', fmt: 'maccms10', hit: true },
+                { name: '光速(GS)', api: 'https://api.guangsuapi.com/api.php/provide/vod/json', fmt: 'maccms10', hit: true },
+                { name: 'HD(BF)', api: 'https://bfzyapi.com/api.php/provide/vod/', fmt: 'maccms10', hit: true },
+                { name: '红牛(HN)', api: 'https://www.hongniuzy2.com/api.php/provide/vod/at/json', fmt: 'maccms10', hit: true }
+            ]
+        },
+        {
+            // 和「✅ 可用」也是同一类结果（都能搜到），单独成组是因为它走的是第三条机制：
+            //   关键词搜被拒 → 联想接口也被拒 → 改翻最近几页列表，在本地按剧名找。
+            // ⚠️ 这条机制只对「最近更新过」的剧有效 —— 这类站分页总数上万，找老剧翻两页不可能命中。
+            sec: 'EcoHub', src: '✅ 可用 · 只能找新剧',
+            items: [
+                { name: '樱花(YH)', api: 'https://m3u8.apiyhzy.com/api.php/provide/vod/', fmt: 'maccms10' }
+            ]
+        },
+        {
+            sec: 'EcoHub', src: '⚠️ 可用，代理稍慢',
+            items: [
+                { name: 'HD(IK)', api: 'https://ikunzyapi.com/api.php/provide/vod/at/json', fmt: 'maccms10' }
+            ]
+        },
+        {
+            sec: '搜索跳转', src: '跳到对方站自己搜',
+            items: [
+                // 排列：家族顺序跟导航页 / 解析接口【保持一致】（见 API_MARK_COLOR 的声明顺序），无色的沉底
+                { name: 'txnp搜索', api: 'https://cms.txnp.cn/index.php/vod/search.html?wd={kw}', fmt: 'search', mark: 'txnp' },
+                { name: '66网1片库搜索', api: 'https://www.66dpw.vip/vodsearch/-------------.html?wd={kw}', fmt: 'search', mark: 'qilin' },
+                { name: '无损云搜索', api: 'http://wsyzy.cc/index.php/vod/search.html?wd={kw}&submit=search', fmt: 'search', mark: 'wsyzy' },
+                { name: 'EcoHub站', api: 'https://eco.fe-spark.cn/search?search={kw}', fmt: 'search', mark: 'eco' },
+                { name: '爱看机器人（主）', api: 'https://www.ikanbot.com/search?q={kw}', fmt: 'search', mark: 'ikanbot' },
+                { name: '爱看机器人（备）', api: 'http://ikanbot.eu.org/search?q={kw}', fmt: 'search', mark: 'ikanbot' }
+            ]
+        },
+    ];
+
+    // 扁平化：让「渲染顺序」和「点击索引」永远一致，避免漏项/错位
+    const COLLECT_ALL = [];
+    COLLECT_GROUPS.forEach((g) => {
+        g.items.forEach((it) => {
+            it.sec = g.sec;
+            it.src = g.src;
+            // 成人标记只看条目自己的 adult 字段；分区标题的 warn 只负责样式，不再兼作成人判定
+            it._idx = COLLECT_ALL.length;
+            COLLECT_ALL.push(it);
+        });
+    });
+
+    // ===== 导航（纯外链，点击用 GM_openInTab 打开）=====
+    const NAV_LINKS = [
+        // ⚠️ 排列规则：
+        //   ① 同色的必须挨在一起；
+        //   ② 家族顺序跟搜索跳转 / 解析接口保持一致（见 API_MARK_COLOR 的声明顺序）——
+        //      在一个分区看熟了顺序，到别的分区不用重新找；
+        //   ③ 带颜色的排在前面（它们是"有来头"的站），不带颜色的沉底。
+        { name: 'cms.txnp.cn', url: 'https://cms.txnp.cn/', mark: 'txnp', desc: '免费短视频分享站，影视 / 短视频 / 动漫 / 综艺 / 学习 / 音乐等分类，自带搜索' },
+        { name: '66大片网', url: 'https://www.66dpw.vip/', mark: 'qilin', desc: '电影 / 动漫 / 短剧 / 综艺等，各分类上万部，每日更新，手机端流畅播放' },
+        { name: '无水印资源网', url: 'http://wsyzy.cc/', mark: 'wsyzy', desc: '电影 / 电视剧 / 美剧 / 韩剧 / 综艺 / 动漫 / 短剧 / 纪录片，站内标称 12.5 万条，自带搜索（首次需验证码）· ⚠️ 它自带的播放器会做 P2P 上传、占用上行带宽' },
+        { name: 'EcoHub 演示站', url: 'https://eco.fe-spark.cn/', mark: 'eco', desc: '开源多播放源聚合站（电视剧 / 电影 / 动漫 / 综艺 / 体育），站点自述「自动采集、多播放源集成」' },
+        { name: '爱看机器人', url: 'https://www.ikanbot.com/', mark: 'ikanbot', desc: '全网影视资源搜索引擎（爬虫检索免费在线影视），自带搜索' },
+        { name: '洛雪TV', url: 'https://tv.lxyy.club/', mark: 'lxyy', desc: '影视推荐聚合（电影 / 电视剧 / 动漫 / 综艺 / 短剧），多来源聚合搜索；搜索在前端做，URL 带不了关键词' },
+        // 以下三条不带颜色（不属于任何一个"家族"）
+        { name: '网盘资源导航', url: 'https://wangpanziyuan.pages.dev/', desc: '电子书 / 漫画 / 影视 / 游戏 / 音乐 / 学习资料 / 办公软件的网盘合集，站内标称 10 万+ 资源' },
+        { name: '动漫共和国', url: 'https://666.oneghg.com/', desc: '日漫 / 国创 / 经典番剧 / 剧场版免费在线追番，另有安卓 / iOS / Windows 客户端' },
+        { name: '小小漫迷', url: 'https://xxmanmi.com/', desc: '动漫在线观看，另有电影 / 综艺 / 美剧 / 韩剧 / 短剧分类，自带搜索' }
+    ];
+
+    const COLLECT_TIMEOUT = 15000;      // 单请求超时(ms)
+    // ===== 采集代理兜底（方案 A）=====
+    // 直连失败时，把目标地址拼在代理后面重试（前缀式：代理地址 + 目标URL）
+    // 直连失败的源走这个代理重试（第三方服务，可用性与安全性自负）
+    // ⚠️ 这是第三方服务器：只在【直连失败】时才用；想彻底关掉就把下面这一行改成空字符串 ''
+    const COLLECT_PROXY = 'https://p.xbta.cc/';
+    // 已经在代理 / 跨域服务上的地址，不再重复套代理
+    const COLLECT_PROXY_SKIP = /^\s*?https?:\/\/(?:[^\/]+?\.)?(?:cors|p\.xbta|seep\.eu|codetabs|similarsites)\./i;
+    const COLLECT_PROXY_MAXFAIL = 3;    // 代理连续失败几次，就本次会话停用代理
+    const COLLECT_LIST_MAXPAGE = 2;     // 「翻最近列表」兜底最多翻几页（每页 20 条，写死防止无限翻）
+    const COLLECT_TWOSTEP_MAX = 3;      // 「两步型」源（沃云）搜索命中很多时，最多跟几条去取详情。
+                                        // 实测搜「斗破」沃云一次返回 20 条，而每条都要一次详情请求 —— 不封顶就会连打 20 次。
+    let collectProxyUsed = 0;           // 统计：本次会话成功走代理几次
+    let collectProxyFail = 0;           // 连续失败计数
+    // ===== 采集源内嵌播放器（阶段3）=====
+    // collectPlayerMode：art = Artplayer；native = 原生 <video controls>
+    const COLLECT_PLAYER_KEY = 'collect_player_mode';
+    let collectPlayerMode = GM_getValue(COLLECT_PLAYER_KEY, 'art') === 'native' ? 'native' : 'art';
+    // 两个库用 @resource 注册，只在真要播的时候才取出来注入 iframe（不给每个页面拖负担）
+    const COLLECT_PLAYER_SANDBOX = 'allow-scripts allow-same-origin';
+    const COLLECT_PLAYER_ALLOW = 'autoplay; fullscreen; encrypted-media';
+    const COLLECT_STATE = { items: [], current: null, sourceIdx: -1, busy: false, keyword: '', listName: '' };
+
+    // 剧名清洗用的噪声词（站点名 / 类型词）
+    const COLLECT_NOISE_RE = /^(电视剧|电影|动漫|番剧|综艺|纪录片|短剧|网剧|美剧|韩剧|日剧|港剧|国漫|全集|高清|正片|预告|预告片|花絮|在线观看|免费观看|手机版|电脑版|完整版|抢先版|国语|粤语|中文版|bilibili|哔哩哔哩|爱奇艺|腾讯视频|优酷|芒果tv|搜狐视频|乐视|pptv|西瓜视频|1905电影网|咪咕视频|好看视频|acfun|抖音|快手)$/i;
+
     function escapeAttr(s) {
         return String(s == null ? '' : s)
             .replace(/&/g, '&amp;')
@@ -910,12 +1390,415 @@
     }
 
     // 裸域名 → 补全 MacCMS 标准路径
+    function normalizeCollectApi(api) {
+        if (!api) return '';
+        if (/^https?:\/\/[^\/]+\/?$/i.test(api)) {
+            return api.replace(/\/+$/, '') + '/api.php/provide/vod/';
+        }
+        return api;
+    }
+
+    // 拼搜索地址
+    function buildCollectUrl(source, keyword) {
+        const kw = encodeURIComponent(keyword);
+        // search / woyun：非常规路径，直接套模板
+        if (source.fmt === 'search' || source.fmt === 'woyun') {
+            return String(source.api).replace('{kw}', kw);
+        }
+        const api = normalizeCollectApi(source.api);
+        const sep = api.indexOf('?') >= 0 ? '&' : '?';
+        const ac = source.fmt === 'maccms8' ? 'ac=videolist' : 'ac=detail';
+        return api + sep + ac + '&wd=' + kw;
+    }
+
+    // 取站点根地址（用于拼 suggest / 详情接口）
+    function collectBaseUrl(api) {
+        try { return new URL(api).origin; } catch (e) { return String(api || '').replace(/\/+$/, ''); }
+    }
+
+    // 判断接口是否明确「禁止关键词搜索」（苹果CMS 的 code=1002）
     function isKeywordSearchForbidden(json) {
         if (!json) return false;
         if (Number(json.code) === 1002) return true;
         return /forbids?\s*keyword|禁止[\s\S]{0,4}搜索|不支持[\s\S]{0,4}搜索/i.test(String(json.msg || ''));
     }
 
+    // 单次 JSON 请求（GM_xmlhttpRequest 由扩展发出，不受同源策略限制）
+    function requestJsonOnce(url, timeout) {
+        return new Promise((resolve) => {
+            if (typeof GM_xmlhttpRequest !== 'function') {
+                resolve({ ok: false, error: 'GM_xmlhttpRequest 不可用' });
+                return;
+            }
+            let settled = false;
+            const finish = (r) => { if (!settled) { settled = true; resolve(r); } };
+            try {
+                GM_xmlhttpRequest({
+                    method: 'GET',
+                    url: url,
+                    timeout: timeout || COLLECT_TIMEOUT,
+                    headers: { 'Accept': 'application/json, text/plain, */*' },
+                    onload: (res) => {
+                        // 记下 HTTP 状态码。只看正文的话，「403 被拒」和「200 返回一张网站首页」
+                        // 会被归成同一类（都叫「返回的是 HTML 网页」），看不出真实病因。
+                        const status = (res && res.status) || 0;
+                        const st = status ? '（HTTP ' + status + '）' : '';
+                        // gotResponse = 对方确实回了话（区别于连不上）—— 上层靠它判断值不值得换打法
+                        const failBase = { ok: false, gotResponse: true, status: status };
+                        const text = ((res && res.responseText) || '').trim();
+                        if (!text) { finish(Object.assign({}, failBase, { error: '空响应' + st })); return; }
+                        // 先判断是不是被防护页 / 网页挡住（有些源返回 HTML 而不是接口数据）
+                        if (/^\s*<|Just a moment|Attention Required|cf-browser|Sorry, you have been blocked|Enable JavaScript and cookies/i.test(text)) {
+                            const cf = /cloudflare|Just a moment|Attention Required|you have been blocked|Enable JavaScript and cookies/i.test(text);
+                            finish(Object.assign({}, failBase, {
+                                cf: cf,
+                                error: (cf ? '被 Cloudflare / 人机验证拦截' : '返回的是 HTML 网页，不是采集接口') + st
+                            }));
+                            return;
+                        }
+                        let json = null;
+                        try { json = JSON.parse(text); } catch (e) { /* 下面做宽松提取 */ }
+                        if (!json) {
+                            const m = text.match(/\{[\s\S]*\}/);
+                            if (m) { try { json = JSON.parse(m[0]); } catch (e2) { json = null; } }
+                        }
+                        if (!json) {
+                            // 站点用【纯文本】回绝关键词搜索（实测就是 6 个字节的「暂不支持搜索」）——
+                            // 这和苹果CMS 的 code=1002 是同一件事，只是没包成 JSON。
+                            // 标记出来交给上层，改走「联想接口 + ids 详情」两步法，否则这条就白死了。
+                            if (/暂不支持[\s\S]{0,6}搜索|forbids?\s*keyword|禁止[\s\S]{0,6}搜索|不支持[\s\S]{0,6}搜索/i.test(text)) {
+                                finish(Object.assign({}, failBase, { error: '不支持关键词搜索', searchForbidden: true, text: text.slice(0, 120) }));
+                                return;
+                            }
+                            finish(Object.assign({}, failBase, { error: '返回不是 JSON' + st + '：' + text.slice(0, 50).replace(/\s+/g, ' ') }));
+                            return;
+                        }
+                        finish({ ok: true, data: json, status: status });
+                    },
+                    ontimeout: () => finish({ ok: false, error: '超时' }),
+                    onerror: () => finish({ ok: false, error: '请求失败' }),
+                    onabort: () => finish({ ok: false, error: '已中断' })
+                });
+            } catch (e) {
+                finish({ ok: false, error: String((e && e.message) || e) });
+            }
+        });
+    }
+
+    // 代理显示名：只取域名（例 p.xbta.cc），状态栏里一眼能看出走的是哪个代理
+    function proxyLabel(u) {
+        try {
+            return String(u).replace(/^https?:\/\//i, '').replace(/\/.*$/, '') || String(u);
+        } catch (e) {
+            return String(u);
+        }
+    }
+
+    // 带代理兜底的 JSON 请求：直连优先，只有【直连失败】才走第三方代理（方案 A）
+    async function requestJson(url, timeout) {
+        const direct = await requestJsonOnce(url, timeout);
+        if (direct.ok) return direct;
+        if (!COLLECT_PROXY) return direct;                              // 代理已关闭
+        if (COLLECT_PROXY_SKIP.test(url)) return direct;                // 已在代理/跨域服务上
+        if (collectProxyFail >= COLLECT_PROXY_MAXFAIL) return direct;   // 代理连续失败，本次会话停用
+        const proxied = await requestJsonOnce(COLLECT_PROXY + url, timeout);
+        if (proxied.ok) {
+            collectProxyFail = 0;
+            collectProxyUsed++;
+            proxied.viaProxy = true;
+            proxied.proxyUrl = COLLECT_PROXY;   // 记下走的是哪个代理，供界面显示
+            return proxied;
+        }
+        collectProxyFail++;
+        // 直连是网络错误、但代理那边拿到了「不支持关键词搜索」的正文时，用代理的结果
+        // （否则这条会被当成普通失败，白白错过联想接口两步法）
+        if (!direct.searchForbidden && proxied.searchForbidden) return proxied;
+        return direct;   // 返回直连的原始错误（更真实，也方便排查）
+    }
+
+    // 备用搜索：先用 /index.php/ajax/suggest 拿 id，再用 ac=detail&ids= 取详情
+    // 有些采集站禁用了 ?wd= 关键词搜索，但联想接口仍然可用
+    async function fetchBySuggest(api, keyword) {
+        const base = collectBaseUrl(api);
+        const sres = await requestJson(base + '/index.php/ajax/suggest?mid=1&wd=' + encodeURIComponent(keyword));
+        if (!sres.ok) {
+            return { ok: false, error: '联想接口失败：' + sres.error, gotResponse: !!sres.gotResponse, cf: !!sres.cf };
+        }
+        const arr = (sres.data && sres.data.list) || [];
+        const ids = arr
+            .map((x) => (x && x.id != null ? x.id : (x && x.vod_id)))
+            .filter((x) => x != null && x !== '')
+            .slice(0, 5);
+        if (!ids.length) return { ok: false, error: '联想接口没有结果', gotResponse: true };
+        const dres = await requestJson(base + '/api.php/provide/vod/?ac=detail&ids=' + ids.join(','));
+        if (!dres.ok) {
+            return { ok: false, error: '详情接口失败：' + dres.error, gotResponse: !!dres.gotResponse, cf: !!dres.cf };
+        }
+        return { ok: true, data: dres.data, viaProxy: !!dres.viaProxy, proxyUrl: dres.proxyUrl || '' };
+    }
+
+    // 最后一条兜底：翻最近几页列表，在本地按剧名找。
+    // 有些站把「按名字问」的两条路都堵死了（?wd= 被拒、联想接口也被拒），但「按页拉列表」还开着。
+    // 列表里的条目结构和正常搜索结果一模一样（直接带着播放地址）⇒ 挑出来就能喂给后面的流程，
+    // 不需要另写一套解析。
+    // ⚠️ 只对「最近更新过」的剧有效：这类站分页总数上万，找老剧翻两页（40 条）不可能命中。
+    async function fetchByRecentList(api, keyword) {
+        const base = collectBaseUrl(api);
+        for (let pg = 1; pg <= COLLECT_LIST_MAXPAGE; pg++) {
+            const res = await requestJson(base + '/api.php/provide/vod/?ac=videolist&pg=' + pg);
+            if (!res.ok) return { ok: false, error: '第 ' + pg + ' 页失败：' + res.error };
+            const list = (res.data && Array.isArray(res.data.list)) ? res.data.list : [];
+            if (!list.length) break;   // 没有更多页了
+            const hit = list.filter((x) => String((x && x.vod_name) || '').indexOf(keyword) >= 0);
+            if (hit.length) {
+                return {
+                    ok: true,
+                    data: { code: 1, list: hit },       // 伪装成一次正常搜索结果，后面的解析/渲染完全复用
+                    viaProxy: !!res.viaProxy,
+                    proxyUrl: res.proxyUrl || '',
+                    page: pg,
+                };
+            }
+        }
+        return { ok: false, error: '翻了最近 ' + COLLECT_LIST_MAXPAGE + ' 页没找到' };
+    }
+
+    // MacCMS JSON → 统一结构
+    function parseMaccmsJson(json) {
+        const list = (json && json.list) || [];
+        const out = [];
+        list.forEach((item) => {
+            if (!item || !item.vod_play_url) return;
+            const froms = String(item.vod_play_from || '').split('$$$');
+            const groups = String(item.vod_play_url).split('$$$');
+            const episodes = [];
+            groups.forEach((group, gi) => {
+                const fromName = String(froms[gi] || ('线路' + (gi + 1))).trim();
+                String(group).split('#').forEach((seg) => {
+                    if (!seg) return;
+                    // 苹果CMS 的段是「剧集名$地址」。但有的源给的是【裸地址】段，没有 `$` 前缀
+                    // —— 实测 乐园(18) 的 ckplayer 线路就是这样：
+                    //      http://zyznygvideo.m6b3xt5.com/…/hls/encrypt/index.m3u8
+                    // 旧写法在这里直接 return，把整段丢掉 ⇒ 该源被判成「返回 1 部，但都取不到播放地址」。
+                    // 现在退化成「整段当 url、label 用默认值」，下面那句 /^https?:\/\// 仍然兜底。
+                    const pos = seg.indexOf('$');
+                    const label = pos < 0 ? '' : seg.slice(0, pos).trim();
+                    const url = (pos < 0 ? seg : seg.slice(pos + 1)).trim();
+                    if (!/^https?:\/\//i.test(url)) return;
+                    // 不再强制要求 .m3u8/.mp4 后缀：有些线路给的是无扩展名的分享链接（如 /share/xxxx）
+                    episodes.push({ label: label || '播放', url: url, from: fromName });
+                });
+            });
+            if (!episodes.length) return;
+            out.push({
+                id: item.vod_id,
+                name: String(item.vod_name || '').trim(),
+                typeId: String(item.type_id == null ? '' : item.type_id),
+                typeName: String(item.type_name || ''),
+                year: String(item.vod_year || ''),
+                remarks: String(item.vod_remarks || ''),
+                pic: String(item.vod_pic || ''),
+                episodes: episodes
+            });
+        });
+        return out;
+    }
+
+    // ===== 两步型源（沃云）=====
+    // 它的搜索响应是自研格式 { code, data:{ search_info, videos:[{ vod_id, vod_name, type_name, vod_time, detail_url }] } }，
+    // 【里面没有播放地址】，得拿 vod_id 再问一次 ?ac=detail&id= 才拿到 play_info.play_urls。
+    // 这属于【格式】不同（对方正常答应了、只是话不一样），不是【策略】（对方拒绝了换个打法），
+    // 所以它不占兜底链的位子，也不复用 suggest / 翻列表那两条。
+    // ⚠️ 搜索里那个 detail_url 是【相对 /api/so/ 的】相对路径（如 index.php?ac=detail&id=86003），
+    //    不是相对网站根目录 —— 这个基址搞错过一次，直接把沃云判成了「只给网站详情页、不给播放地址」。
+    //    所以这里不解析 detail_url，改用数据里写死的 detail 模板（见 COLLECT_GROUPS 里沃云那条）。
+    function parseWoyunSearch(json) {
+        const vids = (json && json.data && json.data.videos) || [];
+        const out = [];
+        vids.forEach((v) => {
+            if (!v || v.vod_id == null) return;
+            out.push({
+                id: String(v.vod_id),
+                name: String(v.vod_name || '').trim(),
+                typeName: String(v.type_name || ''),
+                time: String(v.vod_time || '')
+            });
+        });
+        return out;
+    }
+
+    // 取沃云一条命中的播放地址。走 requestJson，所以自动享受代理兜底。
+    async function fetchWoyunDetail(src, hit) {
+        if (!src.detail) return null;
+        const url = String(src.detail).replace('{id}', encodeURIComponent(hit.id));
+        const res = await requestJson(url);
+        if (!res.ok || !res.data) return null;
+        const d = res.data.data || {};
+        const basic = d.basic_info || {};
+        const list = (d.play_info && d.play_info.play_urls) || [];
+        const episodes = [];
+        list.forEach((e, i) => {
+            if (!e) return;
+            const u = String(e.url || '').trim();
+            if (!/^https?:\/\//i.test(u)) return;   // 只要真地址，相对路径一律丢
+            episodes.push({
+                label: String(e.name || ('第' + (i + 1) + '集')).trim(),
+                url: u,
+                from: '沃云'
+            });
+        });
+        if (!episodes.length) return null;
+        return {
+            viaProxy: !!res.viaProxy,
+            proxyUrl: res.proxyUrl,
+            item: {
+                id: hit.id,
+                name: String(basic.vod_name || hit.name || '').trim(),
+                // 沃云不返回 type_id
+                typeId: '',
+                typeName: String(basic.type_name || hit.typeName || ''),
+                year: '',
+                remarks: String(hit.time || ''),
+                pic: '',
+                episodes: episodes
+            }
+        };
+    }
+
+    // 剧名草稿：从 document.title 取第一段并清洗（仅作默认值，用户可手动修改）
+    // 例：「兰香如故_07_电视剧」→「兰香如故」
+    function guessVideoTitle() {
+        const raw = String(document.title || '').trim();
+        if (!raw) return '';
+        // 去掉括号内容
+        let t = raw.replace(/[（(【\[][^）)】\]]{0,24}[）)】\]]/g, ' ');
+        // 按分隔符切段
+        const parts = t.split(/[|｜/\\\-–—_·•:：,，]/).map(s => s.trim()).filter(Boolean);
+        if (!parts.length) return raw;
+        // 取第一个「不是站点名/类型词」的段
+        let pick = '';
+        for (let i = 0; i < parts.length; i++) {
+            if (!COLLECT_NOISE_RE.test(parts[i])) { pick = parts[i]; break; }
+        }
+        if (!pick) pick = parts[0];
+        // 段内去掉「第X集」「X集」及其后内容
+        pick = pick.replace(/\s*第\s*\d+\s*[集话話期章回][\s\S]*$/, '');
+        pick = pick.replace(/\s*\d{1,4}\s*[集话話期章回][\s\S]*$/, '');
+        pick = pick.replace(/\s*(在线观看|免费观看|在线播放|完整版|全集|抢先版)[\s\S]*$/, '');
+        // 丢掉段内残留的噪声词与孤立数字（如「兰香如故 07」→「兰香如故」）
+        const kept = pick.split(/\s+/)
+            .map(s => s.trim())
+            .filter(s => s && !COLLECT_NOISE_RE.test(s) && !/^\d{1,4}$/.test(s) && !/^\d{1,2}[-~]\d{1,2}$/.test(s));
+        const out = kept.join(' ').trim();
+        return out || pick.trim();
+    }
+
+    function setCollectStatus(text) {
+        if (DOM_CACHE.collectStatus) DOM_CACHE.collectStatus.textContent = text || '';
+    }
+
+    // 清空采集源页的"上屏内容"（剧集列表 + 输出区）。
+    // 搜索前、跳转前都要清，否则上一次的结果会留在那儿，看起来像是重复了。
+    function clearCollectView() {
+        if (DOM_CACHE.collectEpisodes) DOM_CACHE.collectEpisodes.innerHTML = '';
+        if (DOM_CACHE.collectOutput) DOM_CACHE.collectOutput.innerHTML = '';
+    }
+
+    // 源列表渲染：功能(sec) 一级 → 来源(src) 二级
+    function renderCollectSourceList() {
+        const box = DOM_CACHE.collectSources;
+        if (!box) return;
+        let html = '';
+        let lastSec = '';
+        COLLECT_GROUPS.forEach((g) => {
+            if (g.sec !== lastSec) {
+                html += '<div class="collect-sec">【' + g.sec + '】</div>';
+                lastSec = g.sec;
+            }
+            html += '<div class="collect-src-title' + (g.warn ? ' warn' : '') + '">'
+                + g.src + '（' + g.items.length + '）'
+                + (g.hint ? ' <span class="collect-hint">' + g.hint + '</span>' : '')
+                + '</div><div class="collect-src-list">';
+            g.items.forEach((it) => {
+                const idx = it._idx;
+                const cls = 'collect-src-item' + (it.bad ? ' bad' : '');
+                const mStyle = it.mark ? ' style="color:' + (API_MARK_COLOR[it.mark] || 'inherit') + ';"' : '';
+                // 「日常」这类随机组合源没有地址，悬停时把池子里有哪些源列出来
+                let tip = it.name + (it.api ? '：' + it.api : '');
+                if (it.fmt === 'random') {
+                    const pool = COLLECT_ALL.filter((x) => x.hit && x.fmt !== 'random');
+                    tip += '：随机池 ' + pool.length + ' 个源 —— ' + pool.map((x) => x.name).join(' / ');
+                }
+                html += '<span class="' + cls + '"' + mStyle + ' data-idx="' + idx + '" title="' + escapeAttr(tip) + '">'
+                    + escapeAttr(it.name) + '</span>';
+            });
+            html += '</div>';
+        });
+        box.innerHTML = html;
+    }
+
+    // 命中多部时：先给片名列表让用户挑（只显示当前这一个源的）
+    function renderCollectTitles(items, srcName) {
+        const box = DOM_CACHE.collectEpisodes;
+        if (!box) return;
+        // 记住这一批结果的来源显示名：从剧集列表点「← 返回」时要用它重建标题
+        COLLECT_STATE.listName = srcName || '';
+        if (items.length === 1) {
+            renderCollectEpisodeList(items[0], srcName);
+            return;
+        }
+        let html = '<div class="collect-sec">[「' + escapeAttr(srcName) + '」命中 ' + items.length + ' 部]</div><div class="collect-result-list">';
+        items.forEach((it, i) => {
+            html += '<div class="collect-result-item" data-ti="' + i + '" title="' + escapeAttr(it.name) + '">'
+                + escapeAttr(it.name)
+                + (it.year ? ' <em>' + escapeAttr(it.year) + '</em>' : '')
+                + '<span class="collect-meta">' + collectRouteInfo(it).length + ' 线路 · ' + it.episodes.length + ' 段'
+                + (it.remarks ? ' · ' + escapeAttr(it.remarks) : '') + '</span></div>';
+        });
+        html += '</div>';
+        box.innerHTML = html;
+    }
+
+    // 线路统计：同一部片常有 2 条以上线路，标签经常完全一样，必须分组才读得出来
+    function collectRouteInfo(item) {
+        const lines = [];
+        const map = {};
+        item.episodes.forEach((ep, i) => {
+            const key = ep.from || '默认线路';
+            if (!map[key]) { map[key] = { name: key, segs: [] }; lines.push(map[key]); }
+            map[key].segs.push({ ep: ep, idx: i });
+        });
+        return lines;
+    }
+
+    // 剧集列表：按线路分组（平铺会把多条线路的同名标签挤成一片，看不出哪条是哪条）
+    function renderCollectEpisodeList(item, srcName) {
+        const box = DOM_CACHE.collectEpisodes;
+        if (!box) return;
+        const lines = collectRouteInfo(item);
+        let html = '';
+        // 「← 返回命中列表」：只有命中【多部】时才出现（命中 1 部时本来就没有上一层，见 renderCollectTitles）。
+        // 为什么需要它：结果列表和剧集列表渲染进的是【同一个容器】，展开剧集会把列表覆盖掉，
+        // 想换一部就得重新点源按钮、重新发请求。但那批结果其实还在 COLLECT_STATE.items 里，
+        // 重渲染一下就回去了 —— 不多发任何一个请求。
+        if (COLLECT_STATE.items.length > 1) {
+            html += '<span class="collect-back" data-back="1">← 返回命中列表（' + COLLECT_STATE.items.length + ' 部）</span>';
+        }
+        html += '<div class="collect-sec">[' + escapeAttr(item.name) + ' · ' + escapeAttr(srcName || '')
+            + ' · ' + lines.length + ' 线路 / 共 ' + item.episodes.length + ' 段]</div>';
+        lines.forEach((ln) => {
+            html += '<div class="collect-route-name">' + escapeAttr(ln.name) + ' · ' + ln.segs.length + ' 集</div>'
+                + '<div class="collect-ep-list">';
+            ln.segs.forEach((s) => {
+                html += '<span class="collect-ep" data-ei="' + s.idx + '" title="' + escapeAttr(s.ep.label + ' · ' + s.ep.from) + '">'
+                    + escapeAttr(s.ep.label) + '</span>';
+            });
+            html += '</div>';
+        });
+        box.innerHTML = html;
+    }
+
+    // 复制到剪贴板（带降级）
     function copyTextToClipboard(inputEl, text) {
         let copied = false;
         try {
@@ -938,6 +1821,399 @@
                 showConfirmButton: false
             });
         } catch (e) {}
+    }
+
+    // ===== 采集源内嵌播放器（阶段3）=====
+    // 做法：把 hls.js（+ artplayer）和初始化代码拼成一个完整 HTML，
+    //       用 document.write 塞进一个沙盒 iframe 里跑。
+    // 为什么用 iframe：
+    //   1) 完全隔离 —— 不会被任意视频站的 CSS / JS 干扰
+    //   2) 沙盒带 allow-same-origin，iframe 保持父页面源，hls.js 拉 m3u8 时 Origin 正常（CORS 才过得去）
+    //   3) 以后做 m3u8 去广告时，拦截逻辑可以直接注入同一个 iframe
+
+    // 从 @resource 取库源码；取不到返回空串
+    function getPlayerLib(name) {
+        try {
+            if (typeof GM_getResourceText === 'function') return GM_getResourceText(name) || '';
+        } catch (e) { }
+        return '';
+    }
+
+    // 把库源码安全地放进内联 script
+    function escapeInlineScript(src) {
+        return String(src || '').replace(/<\/script>/gi, '<\\/script>');
+    }
+
+    // 生成播放器 iframe 的完整 HTML
+    function buildPlayerHtml(videoUrl, mode) {
+        const hlsSrc = getPlayerLib('hlsJs');
+        const artSrc = mode === 'art' ? getPlayerLib('artPlayerJs') : '';
+        const urlJs = JSON.stringify(String(videoUrl || ''));
+
+        const initNative = '(function(){'
+            + 'var wrap=document.getElementById("wrap");'
+            + 'var url=' + urlJs + ';'
+            + 'var v=document.createElement("video");'
+            + 'v.controls=true;v.autoplay=true;v.muted=true;v.setAttribute("playsinline","");'
+            + 'v.style.cssText="width:100%;height:100%;background:#000;display:block;";'
+            + 'wrap.appendChild(v);'
+            + 'if(window.Hls&&Hls.isSupported()){var hls=new Hls();hls.loadSource(url);hls.attachMedia(v);}'
+            + 'else if(v.canPlayType("application/vnd.apple.mpegurl")){v.src=url;}'
+            + 'else{wrap.innerHTML=\'<div class="err">这个浏览器不支持 HLS 播放</div>\';}'
+            + '})();';
+
+        const initArt = '(function(){'
+            + 'if(typeof Hls==="undefined"||typeof Artplayer==="undefined"){'
+            + 'document.getElementById("wrap").innerHTML=\'<div class="err">播放器库没加载出来（@resource 可能没取到）</div>\';return;}'
+            + 'new Artplayer({'
+            + 'container:"#wrap",'
+            + 'url:' + urlJs + ','
+            + 'type:"m3u8",'
+            + 'customType:{m3u8:function(video,url){'
+            + 'if(Hls.isSupported()){var hls=new Hls();hls.loadSource(url);hls.attachMedia(video);}'
+            + 'else if(video.canPlayType("application/vnd.apple.mpegurl")){video.src=url;}'
+            + '}},'
+            + 'autoplay:true,muted:true,volume:1,'
+            + 'pip:true,fullscreen:true,fullscreenWeb:true,'
+            + 'setting:true,playbackRate:true,aspectRatio:true,hotkey:true,screenshot:false,'
+            + 'theme:"#23ade5",lang:"zh-cn",'
+            + 'moreVideoAttr:{playsinline:true,"webkit-playsinline":true,preload:"auto"},'
+            + 'miniProgressBar:true'
+            + '});'
+            + '})();';
+
+        return '<!DOCTYPE html><html><head><meta charset="utf-8">'
+            + '<meta name="viewport" content="width=device-width,initial-scale=1.0">'
+            + '<style>html,body{margin:0;padding:0;width:100%;height:100%;overflow:hidden;background:#000;}'
+            + '#wrap{width:100%;height:100%;}'
+            + '.err{color:#ff8080;font:12px/1.6 sans-serif;padding:12px;}</style>'
+            + '</head><body><div id="wrap"></div>'
+            + '<script>' + escapeInlineScript(hlsSrc) + '<\/script>'
+            + (artSrc ? '<script>' + escapeInlineScript(artSrc) + '<\/script>' : '')
+            + '<script>' + (mode === 'art' ? initArt : initNative) + '<\/script>'
+            + '</body></html>';
+    }
+
+    // 当前站没有内嵌配置时：在页面上盖一个浮动播放器（不塞进面板）
+    function playCollectFloat(playerHtml) {
+        const old = document.getElementById('vip_collect_float');
+        if (old) old.remove();
+        const wrap = document.createElement('div');
+        wrap.id = 'vip_collect_float';
+        wrap.style.cssText = 'position:fixed;left:50%;top:50%;transform:translate(-50%,-50%);'
+            + 'width:min(92vw,1080px);height:min(80vh,608px);z-index:2147483646;background:#000;'
+            + 'border:1px solid #4a4d55;border-radius:6px;box-shadow:0 10px 40px rgba(0,0,0,.6);overflow:hidden;';
+        const iframe = document.createElement('iframe');
+        iframe.setAttribute('sandbox', COLLECT_PLAYER_SANDBOX);
+        iframe.setAttribute('allow', COLLECT_PLAYER_ALLOW);
+        iframe.setAttribute('frameborder', '0');
+        iframe.setAttribute('referrerpolicy', 'no-referrer');
+        iframe.style.cssText = 'width:100%;height:100%;border:0;display:block;background:#000;';
+        wrap.appendChild(iframe);
+        const close = document.createElement('div');
+        close.textContent = '×';
+        close.title = '关闭播放器';
+        close.style.cssText = 'position:absolute;top:6px;right:12px;color:#fff;font-size:22px;line-height:1;'
+            + 'cursor:pointer;z-index:2;text-shadow:0 1px 3px #000;';
+        close.addEventListener('click', (e) => { e.stopPropagation(); wrap.remove(); });
+        wrap.appendChild(close);
+        (document.body || document.documentElement).appendChild(wrap);
+        try {
+            const doc = iframe.contentDocument || iframe.contentWindow.document;
+            doc.open();
+            doc.write(playerHtml);
+            doc.close();
+        } catch (e) { }
+    }
+
+    // 播采集源的 m3u8：
+    //   优先塞进【页面自己的播放器区】（复用解析接口内嵌模式的容器逻辑）；
+    //   当前站没有配置时，降级成页面上的浮动播放器。
+    function playCollectInPage(m3u8Url) {
+        if (!m3u8Url) return;
+        const html = buildPlayerHtml(m3u8Url, collectPlayerMode);
+        playVideo({ name: '采集源', url: '' }, true, null, html, () => playCollectFloat(html));
+    }
+
+    // 选中剧集后：直接在【页面播放器区】播；面板里保留地址 / 复制 / 播放器切换 / 重新播放
+    function showCollectUrl(ep, sourceName) {
+        COLLECT_STATE.lastEp = ep;
+        COLLECT_STATE.lastSrcName = sourceName || '';
+        const box = DOM_CACHE.collectOutput;
+        if (box) {
+            box.innerHTML = '<div class="collect-player-bar">'
+                + '<span>播放器</span>'
+                + '<select id="collect-player-mode">'
+                + '<option value="art"' + (collectPlayerMode === 'art' ? ' selected' : '') + '>Artplayer</option>'
+                + '<option value="native"' + (collectPlayerMode === 'native' ? ' selected' : '') + '>原生 video</option>'
+                + '</select>'
+                + '<button id="collect-replay-btn">重新播放</button>'
+                + '</div>'
+                + '<div class="collect-url-row">'
+                + '<span class="collect-url-src">' + escapeAttr(sourceName + ' / ' + ep.label + ' / ' + ep.from) + '</span>'
+                + '<input type="text" id="collect-url-input" readonly value="' + escapeAttr(ep.url) + '">'
+                + '<button id="collect-copy-btn">复制</button></div>';
+
+            // 复制
+            const btn = box.querySelector('#collect-copy-btn');
+            const input = box.querySelector('#collect-url-input');
+            if (btn && input) {
+                btn.addEventListener('click', (e) => {
+                    e.stopPropagation();
+                    copyTextToClipboard(input, ep.url);
+                });
+            }
+
+            // 重新播放
+            const replay = box.querySelector('#collect-replay-btn');
+            if (replay) {
+                replay.addEventListener('click', (e) => {
+                    e.stopPropagation();
+                    playCollectInPage(ep.url);
+                });
+            }
+
+            // 播放器切换（记住选择）
+            const sel = box.querySelector('#collect-player-mode');
+            if (sel) {
+                sel.addEventListener('click', (e) => e.stopPropagation());
+                sel.addEventListener('change', (e) => {
+                    e.stopPropagation();
+                    collectPlayerMode = sel.value === 'native' ? 'native' : 'art';
+                    GM_setValue(COLLECT_PLAYER_KEY, collectPlayerMode);
+                    playCollectInPage(ep.url);
+                });
+            }
+        }
+
+        // 直接在页面播放器区开播
+        playCollectInPage(ep.url);
+    }
+
+    function collectMarkSelected(idx) {
+        if (!DOM_CACHE.collectSources) return;
+        DOM_CACHE.collectSources.querySelectorAll('.collect-src-item').forEach((el) => {
+            el.classList.toggle('selected', parseInt(el.getAttribute('data-idx'), 10) === idx);
+        });
+    }
+
+    // 搜索「某一个」采集源（每次只发 1 个请求）
+    async function searchCollectSource(idx) {
+        if (COLLECT_STATE.busy) return;
+        const src = COLLECT_ALL[idx];
+        if (!src) return;
+        // 注：采集源里不再提供"强制跳转"入口；同样的跳转在【解析接口】页可用。
+        const kw = String((DOM_CACHE.collectKeyword && DOM_CACHE.collectKeyword.value) || '').trim();
+        if (!kw) {
+            try {
+                Swal.fire({
+                    title: '请输入剧名',
+                    icon: 'info',
+                    toast: true,
+                    position: 'center',
+                    timer: 1800,
+                    showConfirmButton: false
+                });
+            } catch (e) {}
+            return;
+        }
+        // 随机组合源：从池子里随机挑一个真源，再按那个源的规则搜
+        if (src.fmt === 'random') {
+            // pool: 'auto' = 自动取「所有直连一次就能搜到的源」（数据里带 hit 标记的那些）
+            // 这样源的可用性一变，只要改分区归属，池子就自动跟随，不存在「忘了同步改名单」这件事
+            // （手动列名单的话，源一旦挂掉而名单没改，随机就会挑到死源 —— 酷播那次就是这么发生的）
+            const pool = (src.pool === 'auto')
+                ? COLLECT_ALL.filter((x) => x.hit && x.fmt !== 'random')
+                : (src.pool || [])
+                    .map((n) => COLLECT_ALL.find((x) => x.name === n && x.fmt !== 'random'))
+                    .filter(Boolean);
+            if (!pool.length) {
+                setCollectStatus('「' + src.name + '」的随机池里没有找到可用源');
+                return;
+            }
+            const pick = pool[Math.floor(Math.random() * pool.length)];
+            collectMarkSelected(idx);
+            COLLECT_STATE.sourceIdx = idx;
+            setCollectStatus('「' + src.name + '」随机选中 → ' + pick.name + '，正在搜索…');
+            await doCollectSearch(pick, kw, src.name + ' → ' + pick.name);
+            return;
+        }
+        // 「搜索跳转」类：不是接口，直接用剧名拼好 URL 打开新标签
+        if (src.fmt === 'search') {
+            const target = buildCollectUrl(src, kw);
+            collectMarkSelected(idx);
+            COLLECT_STATE.sourceIdx = idx;
+            COLLECT_STATE.keyword = kw;
+            clearCollectView();
+            try {
+                GM_openInTab(target, {active: true, insert: true, setParent: true});
+            } catch (e) {
+                window.open(target, '_blank');
+            }
+            setCollectStatus('已用「' + src.name + '」打开搜索：' + kw);
+            return;
+        }
+        collectMarkSelected(idx);
+        COLLECT_STATE.sourceIdx = idx;
+        await doCollectSearch(src, kw, src.name);
+    }
+
+    // 真正的取数逻辑（源可能来自随机组合，所以 src 和显示名分开传）
+    async function doCollectSearch(src, kw, showName) {
+        COLLECT_STATE.busy = true;
+        COLLECT_STATE.keyword = kw;
+        COLLECT_STATE.items = [];
+        COLLECT_STATE.current = null;
+        clearCollectView();
+        try {
+            if (!src.api) {
+                setCollectStatus('「' + showName + '」没有可用地址');
+                return;
+            }
+            setCollectStatus('正在搜索「' + showName + '」…');
+            const res = await requestJson(buildCollectUrl(src, kw));
+            // ⚠️ 「按名字问被拒」的判断必须在下面那个提前返回【之前】算出来 ——
+            //    否则第 ③ 种（HTTP 403）会被当成普通失败直接 return，整条兜底链根本没机会跑。
+            // 三种形态：
+            //   ① 返回 JSON 但 code=1002（苹果CMS 的标准回绝）
+            //   ② 返回纯文本「暂不支持搜索」（没包成 JSON，见 requestJsonOnce）
+            //   ③ 直接被 WAF 拒（HTTP 403）—— 正文里既没有 code 也没有「暂不支持搜索」字样，只能靠状态码认
+            const kwRefused = res.searchForbidden
+                || (!res.ok && res.gotResponse && !res.cf && (res.status === 403 || res.status === 401));
+            if (!res.ok && !kwRefused) {
+                setCollectStatus('「' + showName + '」失败：' + res.error);
+                return;
+            }
+            let viaP = res.viaProxy ? '（经代理 ' + proxyLabel(res.proxyUrl || COLLECT_PROXY) + '）' : '';
+            let data = res.data;
+            if (kwRefused || isKeywordSearchForbidden(data)) {
+                setCollectStatus('「' + showName + '」不支持关键词搜索，改用联想接口…');
+                const alt = await fetchBySuggest(src.api, kw);
+                if (alt.ok) {
+                    data = alt.data;
+                    if (alt.viaProxy) viaP = '（经代理 ' + proxyLabel(alt.proxyUrl || COLLECT_PROXY) + '）';
+                } else if (alt.gotResponse && !alt.cf) {
+                    // 联想接口也不行 —— 但「对方是回了话才拒绝的」（不是连不上、也不是被 CF 拦），
+                    // 说明这个站还在、只是把「按名字问」堵死了。再试最后一条：翻最近几页列表本地找。
+                    setCollectStatus('「' + showName + '」联想接口也不行，改翻最近列表找…');
+                    const byList = await fetchByRecentList(src.api, kw);
+                    if (!byList.ok) {
+                        setCollectStatus('「' + showName + '」不支持关键词搜索；联想接口：' + alt.error
+                            + '；翻最近列表：' + byList.error);
+                        return;
+                    }
+                    data = byList.data;
+                    if (byList.viaProxy) viaP = '（经代理 ' + proxyLabel(byList.proxyUrl || COLLECT_PROXY) + '）';
+                } else {
+                    setCollectStatus('「' + showName + '」不支持关键词搜索，联想接口也不行：' + alt.error);
+                    return;
+                }
+            }
+            // ===== 两步型源（沃云）：搜索只给视频 ID，播放地址要再按 ID 问一次 =====
+            // 为什么必须插在这个位置：下面那个 `Array.isArray(data.list)` 是苹果CMS的形状检查，
+            // 沃云返回的是 {code,data:{videos:[…]}}，会在那里被判成「返回结构不认识」直接丢掉。
+            if (src.fmt === 'woyun') {
+                const hits = parseWoyunSearch(data);
+                if (!hits.length) {
+                    setCollectStatus('「' + showName + '」没有命中（' + (data && data.msg ? data.msg : '结果为空') + '）');
+                    return;
+                }
+                const use = hits.slice(0, COLLECT_TWOSTEP_MAX);
+                setCollectStatus('「' + showName + '」命中 ' + hits.length + ' 部'
+                    + (hits.length > use.length ? '，只取前 ' + use.length + ' 部' : '') + '，正在取播放地址…');
+                const got = [];
+                let detailViaP = '';
+                for (let i = 0; i < use.length; i++) {
+                    const one = await fetchWoyunDetail(src, use[i]);
+                    if (!one) continue;
+                    got.push(one.item);
+                    if (one.viaProxy && !detailViaP) detailViaP = '（详情经代理 ' + proxyLabel(one.proxyUrl || COLLECT_PROXY) + '）';
+                }
+                const kept = got;
+                if (!kept.length) {
+                    setCollectStatus('「' + showName + '」命中 ' + hits.length + ' 部，但都没取到播放地址');
+                    return;
+                }
+                COLLECT_STATE.items = kept;
+                renderCollectTitles(kept, showName);
+                setCollectStatus('「' + showName + '」命中 ' + kept.length + ' 部 / ' + kw + viaP + detailViaP
+                    + (hits.length > use.length ? '（另有 ' + (hits.length - use.length) + ' 部未取）' : ''));
+                return;
+            }
+            if (!data || !Array.isArray(data.list)) {
+                setCollectStatus('「' + showName + '」返回结构不认识'
+                    + (data && data.msg ? '：' + data.msg : ''));
+                return;
+            }
+            const all = parseMaccmsJson(data);
+            const items = all;
+            if (!items.length) {
+                const rawCount = data.list.length;
+                let why;
+                if (rawCount) {
+                    why = '返回 ' + rawCount + ' 部，'
+                        + '但都取不到播放地址';
+                } else {
+                    why = data.msg ? String(data.msg) : '结果为空';
+                }
+                setCollectStatus('「' + showName + '」没有命中（' + why + '）');
+                return;
+            }
+            COLLECT_STATE.items = items;
+            renderCollectTitles(items, showName);
+            setCollectStatus('「' + showName + '」命中 ' + items.length + ' 部 / ' + kw + viaP);
+        } catch (e) {
+            setCollectStatus('「' + showName + '」出错：' + String((e && e.message) || e));
+        } finally {
+            COLLECT_STATE.busy = false;
+        }
+    }
+
+    // 「搜索」按钮：重搜上一次选中的源（没选过就提示先选源）
+    function rerunCollectSearch() {
+        if (COLLECT_STATE.sourceIdx < 0) {
+            try {
+                Swal.fire({
+                    title: '请先点一个采集源',
+                    text: '点击下方任一采集源即可开始搜索',
+                    icon: 'info',
+                    toast: true,
+                    position: 'center',
+                    timer: 2200,
+                    showConfirmButton: false
+                });
+            } catch (e) {}
+            return;
+        }
+        searchCollectSource(COLLECT_STATE.sourceIdx);
+    }
+
+    // ===== 导航 =====
+    function renderNavLinks() {
+        const box = DOM_CACHE.navLinks;
+        if (!box) return;
+        let html = '<div class="collect-sec">【导航 ' + NAV_LINKS.length + '】</div>';
+        NAV_LINKS.forEach((n, i) => {
+            // ⚠️ 颜色只能加在【名字】上，不能加在 .nav-item 上 ——
+            //    加在外层时，里面的 .nav-desc / .nav-url 没有自己的 color，会一起继承变成彩色
+            //    （表现：66大片网的说明和网址也变绿）。名字以前是裸文本节点，所以这里包一层 .nav-name。
+            const mStyle = n.mark ? ' style="color:' + (API_MARK_COLOR[n.mark] || 'inherit') + ';"' : '';
+            html += '<div class="nav-item" data-nidx="' + i + '">'
+                + '<span class="nav-name"' + mStyle + '>' + escapeAttr(n.name) + '</span>'
+                + '<span class="nav-desc">' + escapeAttr(n.desc) + '</span>'
+                + '<span class="nav-url">' + escapeAttr(n.url) + '</span></div>';
+        });
+        box.innerHTML = html;
+    }
+
+    function openNavLink(idx) {
+        const n = NAV_LINKS[idx];
+        if (!n) return;
+        try {
+            GM_openInTab(n.url, {active: true, insert: true, setParent: true});
+        } catch (e) {
+            window.open(n.url, '_blank');
+        }
     }
 
     function buildApiListsHtml() {
@@ -1444,11 +2720,35 @@
                     <div class="tab-header">
                         <button class="tab-button active" data-tab="vip">VIP视频解析</button>
                         <div class="tab-divider"></div>
+                        <button class="tab-button" data-tab="collect">采集源</button>
+                        <div class="tab-divider"></div>
+                        <button class="tab-button" data-tab="nav">导航</button>
+                        <div class="tab-divider"></div>
                         <button class="tab-button" data-tab="donate">自定义设置</button>
                     </div>
                     <div class="tab-content active" id="vip-tab">
                         ${simpleApisHtml}
                         ${complexApisHtml}
+                    </div>
+                    <div class="tab-content" id="collect-tab">
+                        <div class="collect-night-note">资源采集源一般到晚上容易卡，因为站长服务器带宽不够大，非脚本原因，请勿反馈</div>
+                        <div class="collect-search">
+                            <input type="text" id="collect-keyword" placeholder="剧名（自动填入，可修改）">
+                            <button id="collect-search-btn">搜索</button>
+                        </div>
+                        <div class="collect-filter-row">
+                            <span class="collect-hint">点下方任一采集源即可搜索；改完剧名再点一次源即重搜</span>
+                        </div>
+                        <div class="collect-status" id="collect-status"></div>
+                        <div class="collect-sources" id="collect-sources"></div>
+                        <div class="collect-episodes" id="collect-episodes"></div>
+                        <div class="collect-output" id="collect-output"></div>
+                    </div>
+                    <div class="tab-content" id="nav-tab">
+                        <div class="collect-filter-row">
+                            <span class="collect-hint">点下方任一条目，在新标签页打开</span>
+                        </div>
+                        <div class="nav-list" id="nav-links"></div>
                     </div>
                     <div class="tab-content" id="donate-tab">
                         ${customSettingsHtml}
@@ -1514,6 +2814,17 @@
         DOM_CACHE.simpleApiList = vipBox.querySelector('.simple-api-list');
         DOM_CACHE.complexApiList = vipBox.querySelector('.complex-api-list');
         DOM_CACHE.noticePanel = vipBox.querySelector('#vip_notice_panel');
+        // ===== 采集源 / 导航 标签页 =====
+        DOM_CACHE.collectTab = vipBox.querySelector('#collect-tab');
+        DOM_CACHE.navTab = vipBox.querySelector('#nav-tab');
+        DOM_CACHE.collectKeyword = vipBox.querySelector('#collect-keyword');
+        DOM_CACHE.collectStatus = vipBox.querySelector('#collect-status');
+        DOM_CACHE.collectSources = vipBox.querySelector('#collect-sources');
+        DOM_CACHE.collectEpisodes = vipBox.querySelector('#collect-episodes');
+        DOM_CACHE.collectOutput = vipBox.querySelector('#collect-output');
+        DOM_CACHE.navLinks = vipBox.querySelector('#nav-links');
+        renderCollectSourceList();
+        renderNavLinks();
         renderCustomApiManage();
         createStyleSetPanel();
         createShortcutSetPanel();
@@ -1589,6 +2900,8 @@
         };
         bindPanelToggleEvents(ctx);
         bindTabEvents(ctx);
+        bindCollectEvents(ctx);
+        bindNavEvents();
         bindSettingsPanelEvents(ctx);
         bindNoticeEvents(ctx);
         bindCustomApiEvents(ctx);
@@ -1677,12 +2990,95 @@
             button.addEventListener("click", function() {
                 const tabId = this.getAttribute("data-tab");
                 switchTab(tabId);
+                // 切到「采集源」时，自动填入当前视频名的草稿（用户可手动改）
+                if (tabId === 'collect' && DOM_CACHE.collectKeyword && !DOM_CACHE.collectKeyword.value.trim()) {
+                    DOM_CACHE.collectKeyword.value = guessVideoTitle();
+                }
             });
         });
 
     }
 
-    // ③ 设置面板
+    // ③ 采集源标签页
+    function bindCollectEvents(ctx) {
+        const { vipBox } = ctx;
+        // ===== 采集源标签页：事件绑定 =====
+        if (DOM_CACHE.collectKeyword) {
+            DOM_CACHE.collectKeyword.addEventListener('click', (e) => e.stopPropagation());
+            DOM_CACHE.collectKeyword.addEventListener('keydown', (e) => {
+                if (e.key === 'Enter') {
+                    e.preventDefault();
+                    rerunCollectSearch();
+                }
+            });
+        }
+        const collectSearchBtn = vipBox.querySelector('#collect-search-btn');
+        if (collectSearchBtn) {
+            collectSearchBtn.addEventListener('click', (e) => {
+                e.stopPropagation();
+                rerunCollectSearch();
+            });
+        }
+        // 点采集源 → 立即用当前剧名搜「这一个源」（每次只发 1 个请求）
+        if (DOM_CACHE.collectSources) {
+            DOM_CACHE.collectSources.addEventListener('click', (e) => {
+                const chip = e.target.closest('.collect-src-item');
+                if (!chip) return;
+                e.stopPropagation();
+                searchCollectSource(parseInt(chip.getAttribute('data-idx'), 10));
+            });
+        }
+        if (DOM_CACHE.collectEpisodes) {
+            DOM_CACHE.collectEpisodes.addEventListener('click', (e) => {
+                // 点「← 返回命中列表」→ 用内存里那批结果重渲染，【不重新请求】
+                if (e.target.closest('.collect-back')) {
+                    renderCollectTitles(COLLECT_STATE.items, COLLECT_STATE.listName || '');
+                    return;
+                }
+                // 命中多部时：点片名 → 展开该片的剧集
+                const titleRow = e.target.closest('.collect-result-item');
+                if (titleRow) {
+                    const ti = parseInt(titleRow.getAttribute('data-ti'), 10);
+                    const item = COLLECT_STATE.items[ti];
+                    if (!item) return;
+                    COLLECT_STATE.current = item;
+                    DOM_CACHE.collectEpisodes.querySelectorAll('.collect-result-item').forEach(x => x.classList.remove('selected'));
+                    titleRow.classList.add('selected');
+                    const selSrc = COLLECT_ALL[COLLECT_STATE.sourceIdx];
+                    renderCollectEpisodeList(item, selSrc ? selSrc.name : '');
+                    if (DOM_CACHE.collectOutput) DOM_CACHE.collectOutput.innerHTML = '';
+                    return;
+                }
+                // 点剧集 → 出 m3u8 地址
+                const epEl = e.target.closest('.collect-ep');
+                if (!epEl) return;
+                const item = COLLECT_STATE.current || COLLECT_STATE.items[0];
+                if (!item) return;
+                const ei = parseInt(epEl.getAttribute('data-ei'), 10);
+                if (!item.episodes[ei]) return;
+                DOM_CACHE.collectEpisodes.querySelectorAll('.collect-ep').forEach(x => x.classList.remove('selected'));
+                epEl.classList.add('selected');
+                const src = COLLECT_ALL[COLLECT_STATE.sourceIdx];
+                showCollectUrl(item.episodes[ei], src ? src.name : '');
+            });
+        }
+
+    }
+
+    // ④ 导航标签页（只用 DOM_CACHE，不需要 ctx）
+    function bindNavEvents() {
+        // ===== 导航：事件绑定 =====
+        if (DOM_CACHE.navLinks) {
+            DOM_CACHE.navLinks.addEventListener('click', (e) => {
+                const item = e.target.closest('.nav-item');
+                if (!item) return;
+                e.stopPropagation();
+                openNavLink(parseInt(item.getAttribute('data-nidx'), 10));
+            });
+        }
+    }
+
+    // ⑤ 三个「设置面板」按钮（样式 / 快捷键 / 自动解析）：互相排斥，点开一个关掉其余
     function bindSettingsPanelEvents(ctx) {
         const { vipBox } = ctx;
         vipBox.querySelector('#open-style-set-btn').addEventListener('click', (e) => {
@@ -2314,7 +3710,9 @@
         };
     }
 
-    function playVideo(videoObj, isEmbed, encodedUrl = null) {
+    // playerHtml：不为空时，把这段 HTML 用 document.write 灌进 iframe（采集源的内嵌播放器用）
+    // onNoContainer：当前站没有内嵌配置时的回调（采集源用它降级成浮动播放器）
+    function playVideo(videoObj, isEmbed, encodedUrl = null, playerHtml = null, onNoContainer = null) {
         if (!isEmbed) return;
 
         clearVipPlaybackTimers();
@@ -2327,6 +3725,7 @@
         const playerConfig = PLAYER_CONTAINERS.find(config => host === config.host);
 
         if (!playerConfig) {
+            if (typeof onNoContainer === 'function') { onNoContainer(); return; }
             console.warn('未找到当前网站的播放器配置');
             Swal.fire({
                 title: '暂不支持内嵌',
@@ -2378,7 +3777,11 @@
                 applyInlineStyles(iframeWrapper, frameLayout.wrapperStyles);
 
                 const iframe = document.createElement('iframe');
-                iframe.src = parseUrl;
+                if (playerHtml) {
+                    iframe.setAttribute('sandbox', COLLECT_PLAYER_SANDBOX);
+                } else {
+                    iframe.src = parseUrl;
+                }
                 iframe.frameBorder = '0';
                 iframe.allow = 'autoplay; encrypted-media; fullscreen';
                 iframe.allowFullscreen = true;
@@ -2467,9 +3870,19 @@
 
                 container.appendChild(iframeWrapper);
 
+                // 采集源内嵌播放器：容器就位后再把 HTML 灌进 iframe
+                if (playerHtml) {
+                    try {
+                        const doc = iframe.contentDocument || iframe.contentWindow.document;
+                        doc.open();
+                        doc.write(playerHtml);
+                        doc.close();
+                    } catch (e) { }
+                }
             })
             .catch(() => {
                 clearVipPlaybackTimers();
+                if (typeof onNoContainer === 'function') { onNoContainer(); return; }
                 console.warn('未找到播放器容器');
                 Swal.fire({
                     title: '未找到播放器区域',
