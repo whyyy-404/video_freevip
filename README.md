@@ -4,6 +4,19 @@
 <table>
 <tr>
 <td width="180" align="center" valign="middle">
+  <a href="https://zip0.com/?r=0LUAMJ">
+    <img src="https://zip0.com/icons/icon-180.png" alt="ZIP0" width="48" height="48" align="middle">
+    <b>ZIP0</b>
+  </a>
+</td>
+<td valign="middle">
+  <b><a href="https://zip0.com/?r=0LUAMJ">ZIP0</a></b>&nbsp;是在线影视聚合搜索与播放站，
+  一次查询多个公开来源，覆盖电影 / 短剧 / 电视剧 / 综艺 / 纪录片 / 体育，另有看电视、听广播、听音乐与小游戏。
+  (❤️ ω ❤️) 作者力推，非常推荐。┏ (゜ω゜)=👉 本行是作者的邀请链接，通过它访问就是对项目的支持。
+</td>
+</tr>
+<tr>
+<td width="180" align="center" valign="middle">
   <a href="https://api-zeno.com/zh-CN/auth/register?ref=abc9818807">
     <img src="https://api-zeno.com/icon.png" alt="api-zeno" width="48" height="48" align="middle">
     <b>api-zeno</b>
