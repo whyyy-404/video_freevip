@@ -19,16 +19,16 @@
   <text x="85" y="85.0" fill="#e6edf3" font-size="16" font-family="Handlee, cursive" font-weight="bold" text-anchor="end">25</text>
   <text x="43" y="271.5" fill="#e6edf3" font-size="17" font-family="Handlee, cursive" font-weight="bold" transform="rotate(-90, 43, 271.5)">GitHub Stars</text>
   <text x="90.0" y="488" fill="#e6edf3" font-size="16" font-family="Handlee, cursive" font-weight="bold" text-anchor="middle">Sep 2025</text>
-  <text x="239.8" y="488" fill="#e6edf3" font-size="16" font-family="Handlee, cursive" font-weight="bold" text-anchor="middle">Nov 2025</text>
-  <text x="453.1" y="488" fill="#e6edf3" font-size="16" font-family="Handlee, cursive" font-weight="bold" text-anchor="middle">Mar 2026</text>
-  <text x="537.7" y="488" fill="#e6edf3" font-size="16" font-family="Handlee, cursive" font-weight="bold" text-anchor="middle">May 2026</text>
-  <text x="729.8" y="488" fill="#e6edf3" font-size="16" font-family="Handlee, cursive" font-weight="bold" text-anchor="middle">Sep 2026</text>
+  <text x="232.7" y="488" fill="#e6edf3" font-size="16" font-family="Handlee, cursive" font-weight="bold" text-anchor="middle">Nov 2025</text>
+  <text x="435.9" y="488" fill="#e6edf3" font-size="16" font-family="Handlee, cursive" font-weight="bold" text-anchor="middle">Mar 2026</text>
+  <text x="516.5" y="488" fill="#e6edf3" font-size="16" font-family="Handlee, cursive" font-weight="bold" text-anchor="middle">May 2026</text>
+  <text x="758.3" y="488" fill="#e6edf3" font-size="16" font-family="Handlee, cursive" font-weight="bold" text-anchor="middle">Oct 2026</text>
   <text x="50%" y="525" fill="#e6edf3" font-size="17" font-family="Handlee, cursive" font-weight="bold" text-anchor="middle">Date</text>
   <line x1="90" y1="80" x2="90" y2="463" stroke="#30363d" stroke-width="2.5" filter="url(#xkcdify)"/>
   <line x1="90" y1="463" x2="765" y2="463" stroke="#30363d" stroke-width="2.5" filter="url(#xkcdify)"/>
-  <path d="M 90.0,447.7 C 101.2,445.1 148.9,434.9 157.0,432.4 C 173.1,427.3 173.1,422.1 186.9,417.0 C 200.7,411.9 195.5,406.8 239.8,401.7 C 284.2,396.6 411.1,391.5 453.1,386.4 C 495.1,381.3 485.1,376.2 491.8,371.1 C 498.6,366.0 486.0,360.9 493.6,355.8 C 501.2,350.7 527.4,345.5 537.7,340.4 C 547.9,335.3 523.3,330.2 555.3,325.1 C 587.3,320.0 694.8,314.9 729.8,309.8 C 747.2,307.2 759.1,297.0 765.0,294.5 L 765.0,463.0 L 90.0,463.0 Z" fill="url(#g)"/>
-  <path d="M 90.0,447.7 C 101.2,445.1 148.9,434.9 157.0,432.4 C 173.1,427.3 173.1,422.1 186.9,417.0 C 200.7,411.9 195.5,406.8 239.8,401.7 C 284.2,396.6 411.1,391.5 453.1,386.4 C 495.1,381.3 485.1,376.2 491.8,371.1 C 498.6,366.0 486.0,360.9 493.6,355.8 C 501.2,350.7 527.4,345.5 537.7,340.4 C 547.9,335.3 523.3,330.2 555.3,325.1 C 587.3,320.0 694.8,314.9 729.8,309.8 C 747.2,307.2 759.1,297.0 765.0,294.5" fill="none" stroke="#dd4528" stroke-width="3" stroke-linecap="round" stroke-linejoin="round" filter="url(#xkcdify)"/>
-  <circle cx="765.0" cy="294.5" r="5" fill="#dd4528" stroke="#0d1117" stroke-width="2" filter="url(#xkcdify)"/>
-<text x="753.0" y="77.0" fill="#dd4528" font-size="18" font-family="Handlee, cursive" font-weight="bold" text-anchor="end">11</text>
+  <path d="M 90.0,447.7 C 100.6,445.1 146.1,434.9 153.8,432.4 C 169.2,427.3 169.2,422.1 182.4,417.0 C 195.5,411.9 190.5,406.8 232.7,401.7 C 275.0,396.6 395.9,391.5 435.9,386.4 C 475.9,381.3 466.4,376.2 472.8,371.1 C 479.3,366.0 467.2,360.9 474.5,355.8 C 481.8,350.7 506.7,345.5 516.5,340.4 C 526.3,335.3 502.8,330.2 533.3,325.1 C 563.8,320.0 666.2,314.9 699.5,309.8 C 732.8,304.7 723.3,299.6 733.1,294.5 C 742.9,289.4 753.0,284.3 758.3,279.2 C 760.9,276.6 763.9,266.4 765.0,263.8 L 765.0,463.0 L 90.0,463.0 Z" fill="url(#g)"/>
+  <path d="M 90.0,447.7 C 100.6,445.1 146.1,434.9 153.8,432.4 C 169.2,427.3 169.2,422.1 182.4,417.0 C 195.5,411.9 190.5,406.8 232.7,401.7 C 275.0,396.6 395.9,391.5 435.9,386.4 C 475.9,381.3 466.4,376.2 472.8,371.1 C 479.3,366.0 467.2,360.9 474.5,355.8 C 481.8,350.7 506.7,345.5 516.5,340.4 C 526.3,335.3 502.8,330.2 533.3,325.1 C 563.8,320.0 666.2,314.9 699.5,309.8 C 732.8,304.7 723.3,299.6 733.1,294.5 C 742.9,289.4 753.0,284.3 758.3,279.2 C 760.9,276.6 763.9,266.4 765.0,263.8" fill="none" stroke="#dd4528" stroke-width="3" stroke-linecap="round" stroke-linejoin="round" filter="url(#xkcdify)"/>
+  <circle cx="765.0" cy="263.8" r="5" fill="#dd4528" stroke="#0d1117" stroke-width="2" filter="url(#xkcdify)"/>
+<text x="753.0" y="77.0" fill="#dd4528" font-size="18" font-family="Handlee, cursive" font-weight="bold" text-anchor="end">13</text>
   <a href="https://github.com/carsteneu/mystarhistory" target="_blank" rel="noopener"><text x="763" y="527" font-size="13" font-family="Handlee, cursive" fill="#fff" text-anchor="end">Made with carsteneu/mystarhistory</text></a>
 </svg>
