@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         🫧404小站 — 🎬VIP追剧神器 | 完全免费 | 支持多平台 | (电脑/手机/平板...自适应)
 // @namespace    https://scriptcat.org/zh-CN/users/162063
-// @version      3.5.2
+// @version      3.5.3
 // @description  ▶在线VIP视频解析工具 (电脑/手机/平板...自适应) | free | 支持多平台【爱奇艺】【腾讯视频】【优酷土豆】【芒果TV】【乐视视频】【哔哩哔哩】【搜狐视频】等常见平台。✨9条解析接口实测可用 ✨内嵌播放无广告 ✨智能切集追剧 ✨内嵌铺满原播放区 ✨一键自动解析  制作不易，有问题可加微信咨询：Why15236444193 [如果加微信未能及时回复，请多多包涵哈！]
 // @author       yyy404
 // @match        *://*/*
@@ -215,8 +215,8 @@
     };
 
     const parseApis = [
-        // ===== 解析接口【只保留已实测可用的 9 条】=====
-        // 这 9 条都是逐条实测确认可用的；历史上删掉的失效条目不再收录。
+        // ===== 解析接口【只保留已实测可用的 10 条】=====
+        // 这 10 条都是逐条实测确认可用的；历史上删掉的失效条目不再收录。
         // ⚠️ 排列规则：同一家的（同色）挨在一起，且【家族顺序跟导航页 / 搜索跳转一致】
         //    （见 API_MARK_COLOR 的声明顺序）。TXNQ 那家排最前，因为它是实测里最好用的。
         {"name": "TXNQ", "type": "1,3", "url": "https://bfq.txnp.cn/player?url=", "mark": "txnp"},
@@ -231,6 +231,10 @@
         // ⚠️ type 用 "1,3" 是故意的：66网2 内嵌被域名授权挡所以只敢写 "3"；这条静态检查没发现拦截，
         //    但静态查不出运行时的域名授权 ⇒ 写 "1,3" 让界面上能【一键切内嵌/弹窗】自己试。
         {"name": "麒麟1", "type": "1,3", "url": "https://free.maccms.xyz/?url=", "mark": "qilin"},
+        // LX解析：lxyy 家族（和导航页「洛雪TV」同域同色）。
+        // ⚠️ 只给 "3"（弹窗）：直接打开或内嵌都会报「您的域名未授权播放」——
+        //    实测入口本身 200，被挡的是它内部播放器的二次请求；必须让它自己的页面打开才正常。
+        {"name": "LX解析", "type": "3", "url": "https://jx.lxyy.club/index.php?url=", "mark": "lxyy", "windowOpen": true},
         // 邦宁：解析结果特殊，所以单独一个颜色。放在最后 —— 原来紧跟 66网那组（蓝绿）之后、
         // 那时 66网还是纯绿，红绿相邻对红绿色弱不友好；现在绿已换蓝绿，而且它排在家族顺序的末位。
         {"name": "邦宁", "type": "1,3", "url": "https://video.isyour.love/player/getplayer?url=", "mark": "special"},
@@ -1399,7 +1403,10 @@
     // 两个库用 @resource 注册，只在真要播的时候才取出来注入 iframe（不给每个页面拖负担）
     const COLLECT_PLAYER_SANDBOX = 'allow-scripts allow-same-origin';
     const COLLECT_PLAYER_ALLOW = 'autoplay; fullscreen; encrypted-media';
-    const COLLECT_STATE = { items: [], current: null, sourceIdx: -1, busy: false, keyword: '', listName: '' };
+    // 自动下一集：默认开（用户定的），开关在采集源标签页
+    const COLLECT_NEXT_KEY = 'collect_auto_next';
+    let collectAutoNext = GM_getValue(COLLECT_NEXT_KEY, true);
+    const COLLECT_STATE = { items: [], current: null, sourceIdx: -1, busy: false, keyword: '', listName: '', lastEp: null, lastSrcName: '' };
 
     // 剧名清洗用的噪声词（站点名 / 类型词）
     const COLLECT_NOISE_RE = /^(电视剧|电影|动漫|番剧|综艺|纪录片|短剧|网剧|美剧|韩剧|日剧|港剧|国漫|全集|高清|正片|预告|预告片|花絮|在线观看|免费观看|手机版|电脑版|完整版|抢先版|国语|粤语|中文版|bilibili|哔哩哔哩|爱奇艺|腾讯视频|优酷|芒果tv|搜狐视频|乐视|pptv|西瓜视频|1905电影网|咪咕视频|好看视频|acfun|抖音|快手)$/i;
@@ -1883,12 +1890,13 @@
             + 'if(window.Hls&&Hls.isSupported()){var hls=new Hls();hls.loadSource(url);hls.attachMedia(v);}'
             + 'else if(v.canPlayType("application/vnd.apple.mpegurl")){v.src=url;}'
             + 'else{wrap.innerHTML=\'<div class="err">这个浏览器不支持 HLS 播放</div>\';}'
+            + 'v.addEventListener("ended",function(){try{parent.postMessage({type:"vipCollectEnded"},"*");}catch(e){}});'
             + '})();';
 
         const initArt = '(function(){'
             + 'if(typeof Hls==="undefined"||typeof Artplayer==="undefined"){'
             + 'document.getElementById("wrap").innerHTML=\'<div class="err">播放器库没加载出来（@resource 可能没取到）</div>\';return;}'
-            + 'new Artplayer({'
+            + 'var ap=new Artplayer({'
             + 'container:"#wrap",'
             + 'url:' + urlJs + ','
             + 'type:"m3u8",'
@@ -1903,6 +1911,7 @@
             + 'moreVideoAttr:{playsinline:true,"webkit-playsinline":true,preload:"auto"},'
             + 'miniProgressBar:true'
             + '});'
+            + 'ap.on("video:ended",function(){try{parent.postMessage({type:"vipCollectEnded"},"*");}catch(e){}});'
             + '})();';
 
         return '<!DOCTYPE html><html><head><meta charset="utf-8">'
@@ -1957,6 +1966,80 @@
         const html = buildPlayerHtml(m3u8Url, collectPlayerMode);
         playVideo({ name: '采集源', url: '' }, true, null, html, () => playCollectFloat(html));
     }
+
+    // ===== 自动下一集 =====
+    // 播放器在 iframe 里（sandbox 带 allow-same-origin），播完会 postMessage 上来；
+    // 这里接住，倒计时 3 秒后播下一集。取消有两个入口：倒计时条上的「取消」、或关掉采集页的开关。
+    let collectNextTimer = null;
+    function clearCollectNextCountdown() {
+        if (collectNextTimer) { clearInterval(collectNextTimer); collectNextTimer = null; }
+        const bar = document.getElementById('collect-next-bar');
+        if (bar) bar.remove();
+    }
+    // 找「当前集的下一集」。episodes 是打平后的剧集数组（每个元素有 url / label / from）
+    function findNextCollectEpisode() {
+        const cur = COLLECT_STATE.current;
+        const ep = COLLECT_STATE.lastEp;
+        if (!cur || !ep || !Array.isArray(cur.episodes)) return null;
+        const i = cur.episodes.findIndex((x) => x && x.url === ep.url && x.label === ep.label);
+        if (i < 0 || i + 1 >= cur.episodes.length) return null;
+        return cur.episodes[i + 1];
+    }
+    function playNextCollectEpisode() {
+        const next = findNextCollectEpisode();
+        if (!next) return false;
+        showCollectUrl(next, COLLECT_STATE.lastSrcName || '');
+        playCollectInPage(next.url);
+        return true;
+    }
+    function showCollectNextCountdown() {
+        if (!collectAutoNext) return;
+        if (!findNextCollectEpisode()) return;                // 已经是最后一集 → 不弹
+        clearCollectNextCountdown();
+        // 提示挂在播放器正中。不用方框（用户觉得有框很丑），只用文字 + 轻微阴影保证在任何画面上都看得清。
+        const holder = document.querySelector('.vip_jx_iframe_wrapper');
+        const bar = document.createElement('div');
+        bar.id = 'collect-next-bar';
+        const posStyle = holder
+            ? 'position:absolute;left:50%;top:50%;transform:translate(-50%,-50%);'
+            : 'position:fixed;left:50%;top:50%;transform:translate(-50%,-50%);';
+        bar.style.cssText = posStyle + 'z-index:2147483000;'
+            + 'background:transparent;border:none;color:#fff;padding:0;'
+            + 'display:flex;flex-direction:column;align-items:center;gap:10px;'
+            + 'font-size:16px;font-weight:bold;line-height:1.6;text-align:center;'
+            + 'text-shadow:0 2px 8px rgba(0,0,0,.95),0 0 3px rgba(0,0,0,.9);pointer-events:none;';
+        let left = 4;
+        const txt = document.createElement('span');
+        const btn = document.createElement('button');
+        btn.textContent = '取消自动跳转';
+        btn.style.cssText = 'background:transparent;color:#7dd3fc;border:none;padding:0;cursor:pointer;'
+            + 'font-size:13px;font-weight:normal;text-decoration:underline;'
+            + 'text-shadow:0 2px 8px rgba(0,0,0,.95);pointer-events:auto;';
+        btn.onclick = (e) => { e.stopPropagation(); clearCollectNextCountdown(); };
+        const tick = () => { txt.textContent = 'yyy404 帮您跳转下一集，祝您观影愉快（' + left + ' 秒）'; };
+        tick();
+        bar.appendChild(txt);
+        bar.appendChild(btn);
+        if (holder) {
+            if (getComputedStyle(holder).position === 'static') holder.style.position = 'relative';
+            holder.appendChild(bar);
+        } else {
+            document.body.appendChild(bar);
+        }
+        collectNextTimer = setInterval(() => {
+            left -= 1;
+            tick();
+            if (left <= 0) {
+                clearCollectNextCountdown();
+                playNextCollectEpisode();
+            }
+        }, 1000);
+    }
+    // 播放器 iframe 的「播完」消息（见 buildPlayerHtml 里的 ended / video:ended）
+    window.addEventListener('message', (e) => {
+        if (!e || !e.data || e.data.type !== 'vipCollectEnded') return;
+        showCollectNextCountdown();
+    });
 
     // 选中剧集后：直接在【页面播放器区】播；面板里保留地址 / 复制 / 播放器切换 / 重新播放
     function showCollectUrl(ep, sourceName) {
@@ -2760,6 +2843,7 @@
                             <button id="collect-search-btn">搜索</button>
                         </div>
                         <div class="collect-filter-row">
+                            <label><input type="checkbox" id="collect-auto-next-chk"> 自动下一集</label>
                             <span class="collect-hint">点下方任一采集源即可搜索；改完剧名再点一次源即重搜</span>
                         </div>
                         <div class="collect-status" id="collect-status"></div>
@@ -2840,6 +2924,7 @@
         // ===== 采集源 / 导航 标签页 =====
         DOM_CACHE.collectTab = vipBox.querySelector('#collect-tab');
         DOM_CACHE.navTab = vipBox.querySelector('#nav-tab');
+        DOM_CACHE.collectAutoNextChk = vipBox.querySelector('#collect-auto-next-chk');
         DOM_CACHE.collectKeyword = vipBox.querySelector('#collect-keyword');
         DOM_CACHE.collectStatus = vipBox.querySelector('#collect-status');
         DOM_CACHE.collectSources = vipBox.querySelector('#collect-sources');
@@ -3026,6 +3111,14 @@
     function bindCollectEvents(ctx) {
         const { vipBox } = ctx;
         // ===== 采集源标签页：事件绑定 =====
+        if (DOM_CACHE.collectAutoNextChk) {
+            DOM_CACHE.collectAutoNextChk.checked = collectAutoNext;
+            DOM_CACHE.collectAutoNextChk.addEventListener('change', () => {
+                collectAutoNext = !!DOM_CACHE.collectAutoNextChk.checked;
+                GM_setValue(COLLECT_NEXT_KEY, collectAutoNext);
+                if (!collectAutoNext) clearCollectNextCountdown();
+            });
+        }
         if (DOM_CACHE.collectKeyword) {
             DOM_CACHE.collectKeyword.addEventListener('click', (e) => e.stopPropagation());
             DOM_CACHE.collectKeyword.addEventListener('keydown', (e) => {
