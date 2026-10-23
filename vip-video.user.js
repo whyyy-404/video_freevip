@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         🫧404小站 — 🎬VIP追剧神器 | 完全免费 | 支持多平台 | (电脑/手机/平板...自适应)
 // @namespace    https://scriptcat.org/zh-CN/users/162063
-// @version      3.5.3
+// @version      3.5.4
 // @description  ▶在线VIP视频解析工具 (电脑/手机/平板...自适应) | free | 支持多平台【爱奇艺】【腾讯视频】【优酷土豆】【芒果TV】【乐视视频】【哔哩哔哩】【搜狐视频】等常见平台。✨9条解析接口实测可用 ✨内嵌播放无广告 ✨智能切集追剧 ✨内嵌铺满原播放区 ✨一键自动解析  制作不易，有问题可加微信咨询：Why15236444193 [如果加微信未能及时回复，请多多包涵哈！]
 // @author       yyy404
 // @match        *://*/*
@@ -15,7 +15,6 @@
 // @resource     artPlayerJs https://cdn.jsdelivr.net/npm/artplayer@5.4.0/dist/artplayer.js
 // @grant        GM_getResourceText
 // @connect      *
-// @require      https://cdn.jsdelivr.net/npm/sweetalert2@11
 // @run-at       document-start
 // @icon         https://cdn.jsdmirror.com/gh/whyyy-404/icon@main/Collection/Cartoon/bear-yes.gif
 // ==/UserScript==
@@ -326,6 +325,7 @@
             displayNodes: ["div.m-iqyGuide-layer", "a[down-app-android-url]", "div.iqp-player-vipmask", ".loading_loading__vzq4j", "[name=m-extendBar]", "[class*=ChannelHomeBanner]", "section.m-hotWords-bottom"]
         },
         {host: "www.iq.com", container: ".intl-video-wrap", displayNodes: []},
+        {host: "www.youku.com", container: "#ykPlayer,#playerMouseWheel,.h5-detail-player", displayNodes: []},
         {
             host: "v.youku.com",
             container: "#ykPlayer,#playerMouseWheel,.h5-detail-player",
@@ -383,6 +383,107 @@
         tryCopy(CONFIG.autoPlayerVal, "auto_player_value_");
     })();
 
+    // ===== 轻量提示条 =====
+    // 自绘的居中提示：白底卡片，带图标与出入场动画；样式全部内联，不受站点 CSS 影响。
+    // 关键帧只注入一次（单独一个 <style>，用 vipT- 前缀避免和站点样式冲突）。
+    let vipToastStyleInjected = false;
+    function ensureVipToastStyle() {
+        if (vipToastStyleInjected) return;
+        vipToastStyleInjected = true;
+        const st = document.createElement('style');
+        st.id = 'vip-toast-style';
+        st.textContent = [
+            /* 提示条入场：上移缩放 + 轻微摇摆 */
+            '@keyframes vipT-in{0%{transform:translate(-50%,-50%) translateY(-14px) scale(.88) rotate(2deg);opacity:0}',
+            '33%{transform:translate(-50%,-50%) translateY(0) scale(1.02) rotate(-2deg);opacity:1}',
+            '66%{transform:translate(-50%,-50%) translateY(5px) scale(1) rotate(1.2deg);opacity:1}',
+            '100%{transform:translate(-50%,-50%) translateY(0) scale(1) rotate(0deg);opacity:1}}',
+            /* 提示条出场：上移缩小并淡出 */
+            '@keyframes vipT-out{0%{transform:translate(-50%,-50%) translateY(0) scale(1);opacity:1}',
+            '100%{transform:translate(-50%,-50%) translateY(-50px) scale(.9);opacity:0}}',
+            /* 成功图标：外圈由短到长描出，随后画出对勾 */
+            '@keyframes vipT-circle{0%{stroke-dashoffset:166}100%{stroke-dashoffset:0}}',
+            '@keyframes vipT-check{0%{stroke-dashoffset:48}100%{stroke-dashoffset:0}}',
+            /* 失败图标：整体翻转入场，叉号由小放大 */
+            '@keyframes vipT-flip{0%{transform:rotateX(100deg);opacity:0}100%{transform:rotateX(0deg);opacity:1}}',
+            '@keyframes vipT-xmark{0%{transform:scale(.4);opacity:0}80%{transform:scale(1.1);opacity:1}100%{transform:scale(1);opacity:1}}',
+            /* 信息图标：旋转摇摆入场 */
+            '@keyframes vipT-wobble{0%{transform:rotateZ(45deg);opacity:0}25%{transform:rotateZ(-25deg);opacity:.4}',
+            '50%{transform:rotateZ(15deg);opacity:.8}75%{transform:rotateZ(-5deg);opacity:1}100%{transform:rotateZ(0);opacity:1}}',
+        ].join('');
+        (document.head || document.documentElement).appendChild(st);
+    }
+    function vipToast(title, text, opts) {
+        opts = opts || {};
+        ensureVipToastStyle();
+        const icon = opts.icon || 'success';
+        const box = document.createElement('div');
+        // 内联样式 + box-sizing 防止被站点 CSS 撑开；竖排居中，最大宽度 480px
+        box.style.cssText = 'position:fixed;left:50%;top:50%;'
+            + 'transform:translate(-50%,-50%);z-index:2147483647;box-sizing:border-box;'
+            + 'width:auto;min-width:16em;max-width:min(90vw,480px);'
+            + 'background:#fff;color:#545454;padding:1.4em 1.8em;border-radius:.3125rem;'
+            + 'box-shadow:0 6px 24px rgba(0,0,0,.16);font-size:14px;line-height:1.6;'
+            + 'text-align:center;font-family:inherit;word-break:break-word;'
+            + 'display:flex;flex-direction:column;align-items:center;gap:.55em;'
+            + 'pointer-events:auto;cursor:pointer;animation:vipT-in .42s cubic-bezier(.2,.9,.3,1.2) both;';
+        // ---- 图标：按类型生成 SVG（成功 / 失败 / 警告 / 信息）----
+        const ICON_SIZE = 28;
+        let svg = '';
+        if (icon === 'success') {
+            svg = '<svg width="' + ICON_SIZE + '" height="' + ICON_SIZE + '" viewBox="0 0 52 52" fill="none">'
+                + '<circle cx="26" cy="26" r="24" stroke="#a5dc86" stroke-width="3" fill="none" '
+                + 'stroke-dasharray="166" stroke-dashoffset="166" style="animation:vipT-circle .55s ease-out forwards"/>'
+                + '<path d="M14 27 L23 35 L38 19" stroke="#a5dc86" stroke-width="3.5" fill="none" '
+                + 'stroke-linecap="round" stroke-linejoin="round" stroke-dasharray="48" stroke-dashoffset="48" '
+                + 'style="animation:vipT-check .3s .45s ease-out forwards"/></svg>';
+        } else if (icon === 'error') {
+            svg = '<svg width="' + ICON_SIZE + '" height="' + ICON_SIZE + '" viewBox="0 0 52 52" fill="none" '
+                + 'style="animation:vipT-flip .3s ease-out both">'
+                + '<circle cx="26" cy="26" r="24" stroke="#f27474" stroke-width="3" fill="none"/>'
+                + '<path d="M17 17 L35 35 M35 17 L17 35" stroke="#f27474" stroke-width="3.5" stroke-linecap="round" '
+                + 'style="transform-origin:26px 26px;animation:vipT-xmark .3s .15s ease-out both"/></svg>';
+        } else if (icon === 'warning') {
+            svg = '<svg width="' + ICON_SIZE + '" height="' + ICON_SIZE + '" viewBox="0 0 52 52" fill="none" '
+                + 'style="animation:vipT-flip .3s ease-out both">'
+                + '<path d="M26 6 L48 44 L4 44 Z" stroke="#f8bb86" stroke-width="3" fill="none" stroke-linejoin="round"/>'
+                + '<rect x="23.6" y="19" width="4.8" height="13" rx="2.4" fill="#f8bb86"/>'
+                + '<circle cx="26" cy="37" r="2.6" fill="#f8bb86"/></svg>';
+        } else {
+            svg = '<svg width="' + ICON_SIZE + '" height="' + ICON_SIZE + '" viewBox="0 0 52 52" fill="none" '
+                + 'style="animation:vipT-wobble .5s ease-out both">'
+                + '<circle cx="26" cy="26" r="24" stroke="#7dd3fc" stroke-width="3" fill="none"/>'
+                + '<circle cx="26" cy="16" r="2.6" fill="#7dd3fc"/>'
+                + '<rect x="23.4" y="23" width="5.2" height="16" rx="2.6" fill="#7dd3fc"/></svg>';
+        }
+        // ---- 文字：标题 + 说明（opts.html 为真时按 HTML 渲染）----
+        const icoWrap = document.createElement('div');
+        icoWrap.style.cssText = 'display:block;line-height:0;';
+        icoWrap.innerHTML = svg;
+        box.appendChild(icoWrap);
+        const t1 = document.createElement('div');
+        t1.style.cssText = 'font-weight:600;font-size:1.15em;color:#545454;';
+        if (opts.html) { t1.innerHTML = String(title || ''); } else { t1.textContent = String(title || ''); }
+        box.appendChild(t1);
+        if (text) {
+            const t2 = document.createElement('div');
+            t2.style.cssText = 'font-size:.92em;color:#7a7a7a;white-space:pre-line;';
+            if (opts.html) { t2.innerHTML = String(text); } else { t2.textContent = String(text); }
+            box.appendChild(t2);
+        }
+        box.addEventListener('click', () => vipToastClose(box));
+        (document.documentElement || document.body).appendChild(box);
+        const ms = opts.ms || 1500;
+        setTimeout(() => vipToastClose(box), ms);
+        return box;
+    }
+    // 播放出场动画，动画结束后移除节点；重复调用会被 dataset.closing 拦掉
+    function vipToastClose(box) {
+        if (!box || !box.parentNode || box.dataset.closing) return;
+        box.dataset.closing = '1';
+        box.style.animation = 'vipT-out .28s ease-in forwards';
+        setTimeout(() => { try { box.remove(); } catch (e) { } }, 300);
+    }
     const DOM_CACHE = {
         vipBox: null,
         vipList: null,
@@ -1841,15 +1942,9 @@
             copied = true;
         }
         try {
-            Swal.fire({
-                title: copied ? '已复制' : '请手动复制',
-                text: copied ? '已复制到剪贴板' : '自动复制失败，请手动选中复制',
-                icon: copied ? 'success' : 'warning',
-                toast: true,
-                position: 'center',
-                timer: copied ? 1500 : 2500,
-                showConfirmButton: false
-            });
+            vipToast(copied ? '已复制' : '请手动复制',
+                copied ? '已复制到剪贴板' : '自动复制失败，请手动选中复制',
+                { icon: copied ? 'success' : 'warning', ms: copied ? 1500 : 2500 });
         } catch (e) {}
     }
 
@@ -2112,14 +2207,7 @@
         const kw = String((DOM_CACHE.collectKeyword && DOM_CACHE.collectKeyword.value) || '').trim();
         if (!kw) {
             try {
-                Swal.fire({
-                    title: '请输入剧名',
-                    icon: 'info',
-                    toast: true,
-                    position: 'center',
-                    timer: 1800,
-                    showConfirmButton: false
-                });
+                vipToast('请输入剧名', '', { icon: 'info', ms: 1800 });
             } catch (e) {}
             return;
         }
@@ -2279,15 +2367,7 @@
     function rerunCollectSearch() {
         if (COLLECT_STATE.sourceIdx < 0) {
             try {
-                Swal.fire({
-                    title: '请先点一个采集源',
-                    text: '点击下方任一采集源即可开始搜索',
-                    icon: 'info',
-                    toast: true,
-                    position: 'center',
-                    timer: 2200,
-                    showConfirmButton: false
-                });
+                vipToast('请先点一个采集源', '点击下方任一采集源即可开始搜索', { icon: 'info', ms: 2200 });
             } catch (e) {}
             return;
         }
@@ -2568,15 +2648,7 @@
             GM_setValue(CONFIG.customStyleKey, newStyle);
             applyPanelStyle(newStyle);
 
-            Swal.fire({
-                title: '保存成功',
-                text: '样式设置已保存',
-                icon: 'success',
-                toast: true,
-                position: 'center',
-                timer: 1500,
-                showConfirmButton: false
-            });
+            vipToast('保存成功', '样式设置已保存', { ms: 1500 });
         });
 
         // 恢复默认（写回 GM，全站生效）
@@ -2588,15 +2660,7 @@
             panel.querySelector('#style-opacity').value = DEFAULT_STYLE.opacity;
             panel.querySelector('#style-width').value = DEFAULT_STYLE.width;
 
-            Swal.fire({
-                title: '已恢复默认',
-                text: '样式已恢复为默认并已保存（所有网站共用）',
-                icon: 'success',
-                toast: true,
-                position: 'center',
-                timer: 2000,
-                showConfirmButton: false
-            });
+            vipToast('已恢复默认', '样式已恢复为默认并已保存（所有网站共用）', { ms: 2000 });
         });
     }
 
@@ -2631,29 +2695,13 @@
             const refresh = panel.querySelector('#shortcut-refresh').value.trim().toLowerCase();
             const style = panel.querySelector('#shortcut-style').value.trim().toLowerCase();
             if (!toggle || !refresh || !style) {
-                Swal.fire({
-                    title: '提示',
-                    text: '快捷键不能为空！',
-                    icon: 'warning',
-                    toast: true,
-                    position: 'center',
-                    timer: 2000,
-                    showConfirmButton: false
-                });
+                vipToast('提示', '快捷键不能为空！', { icon: 'warning', ms: 2000 });
                 return;
             }
             const newShortcut = { toggle, refresh, style };
             GM_setValue(CONFIG.customShortcutKey, newShortcut);
             CONFIG.shortcut = newShortcut;
-            Swal.fire({
-                title: '保存成功',
-                text: '快捷键已保存，立即生效',
-                icon: 'success',
-                toast: true,
-                position: 'center',
-                timer: 1500,
-                showConfirmButton: false
-            });
+            vipToast('保存成功', '快捷键已保存，立即生效', { ms: 1500 });
         });
         panel.querySelector('#reset-shortcut-btn').addEventListener('click', () => {
             GM_setValue(CONFIG.customShortcutKey, DEFAULT_SHORTCUT);
@@ -2661,15 +2709,7 @@
             panel.querySelector('#shortcut-toggle').value = DEFAULT_SHORTCUT.toggle;
             panel.querySelector('#shortcut-refresh').value = DEFAULT_SHORTCUT.refresh;
             panel.querySelector('#shortcut-style').value = DEFAULT_SHORTCUT.style;
-            Swal.fire({
-                title: '重置成功',
-                text: '已恢复默认快捷键',
-                icon: 'success',
-                toast: true,
-                position: 'center',
-                timer: 1500,
-                showConfirmButton: false
-            });
+            vipToast('重置成功', '已恢复默认快捷键', { ms: 1500 });
         });
     }
 
@@ -2714,30 +2754,14 @@
         panel.querySelector('#save-auto-parse-btn').addEventListener('click', () => {
             const selectedIndex = parseInt(selectElement.value);
             if (selectedIndex === -1) {
-                Swal.fire({
-                    title: '提示',
-                    text: '请先选择一个解析接口！',
-                    icon: 'warning',
-                    toast: true,
-                    position: 'center',
-                    timer: 2000,
-                    showConfirmButton: false
-                });
+                vipToast('提示', '请先选择一个解析接口！', { icon: 'warning', ms: 2000 });
                 return;
             }
 
             const selectedApi = allApis[selectedIndex];
             GM_setValue(CONFIG.autoPlayerVal, selectedIndex);
 
-            Swal.fire({
-                title: '保存成功',
-                html: `已设置 <b>${selectedApi.name}</b> 为自动解析接口<br><small>点击跳熊/发呆熊浮标控制自动解析</small>`,
-                icon: 'success',
-                toast: true,
-                position: 'center',
-                timer: 2000,
-                showConfirmButton: false
-            });
+            vipToast('保存成功', `已设置 <b>${selectedApi.name}</b> 为自动解析接口<br><small>点击跳熊/发呆熊浮标控制自动解析</small>`, { html: true, ms: 2000 });
 
             // 更新自动解析按钮的提示
             const autoBtn = DOM_CACHE.vipBox.querySelector("#vip_auto");
@@ -2750,15 +2774,7 @@
         panel.querySelector('#disable-auto-parse-btn').addEventListener('click', () => {
             GM_setValue(CONFIG.autoPlayerKey, null);
 
-            Swal.fire({
-                title: '已关闭自动解析',
-                text: '刷新页面后生效',
-                icon: 'info',
-                toast: true,
-                position: 'center',
-                timer: 1500,
-                showConfirmButton: false
-            });
+            vipToast('已关闭自动解析', '刷新页面后生效', { icon: 'info', ms: 1500 });
 
             // 更新自动解析按钮状态
             const autoBtn = DOM_CACHE.vipBox.querySelector("#vip_auto");
@@ -3332,15 +3348,7 @@
                 renderCustomApiManage();   // 管理面板也要跟着刷新，否则删不掉刚加的那条
                 // 切回「VIP视频解析」标签页，让新接口立即可见（无需刷新）
                 switchTab('vip');
-                Swal.fire({
-                    title: '添加成功',
-                    text: '自定义接口已添加，直接使用无需刷新！',
-                    icon: 'success',
-                    toast: true,
-                    position: 'center',
-                    timer: 2000,
-                    showConfirmButton: false
-                });
+                vipToast('添加成功', '自定义接口已添加，直接使用无需刷新！', { ms: 2000 });
             });
         }
         const cancelApiBtn = vipBox.querySelector("#cancel-api-btn");
@@ -3448,15 +3456,7 @@
             if (!!GM_getValue(CONFIG.autoPlayerKey, null)) {
                 GM_setValue(CONFIG.autoPlayerKey, null);
                 updateAutoSwitchIcon(false);
-                Swal.fire({
-                    title: '已关闭自动解析',
-                    text: '刷新页面后生效',
-                    icon: 'info',
-                    toast: true,
-                    position: 'center',
-                    timer: 1500,
-                    showConfirmButton: false
-                });
+                vipToast('已关闭自动解析', '刷新页面后生效', { icon: 'info', ms: 1500 });
                 setTimeout(() => {
                     window.location.reload();
                 }, 1500);
@@ -3466,15 +3466,7 @@
                 const selectedApi = allApis[selectedIndex];
 
                 if (!selectedApi || !selectedApi.type.includes("1")) {
-                    Swal.fire({
-                        title: '请先设置自动解析接口',
-                        text: '点击下方"自动解析设置"按钮选择解析接口',
-                        icon: 'info',
-                        toast: true,
-                        position: 'center',
-                        timer: 2500,
-                        showConfirmButton: false
-                    });
+                    vipToast('请先设置自动解析接口', '点击下方「自动解析设置」按钮选择解析接口', { icon: 'info', ms: 2500 });
                     return;
                 }
 
@@ -3482,15 +3474,7 @@
                 GM_setValue(CONFIG.autoPlayerKey, "true");
                 updateAutoSwitchIcon(true, selectedApi.name);
 
-                Swal.fire({
-                    title: '已开启自动解析',
-                    html: `使用 <b>${selectedApi.name}</b> 自动解析<br>刷新页面后生效`,
-                    icon: 'success',
-                    toast: true,
-                    position: 'center',
-                    timer: 1500,
-                    showConfirmButton: false
-                });
+                vipToast('已开启自动解析', '使用 ' + selectedApi.name + ' 自动解析' + '\n' + '刷新页面后生效', { ms: 1500 });
 
                 setTimeout(() => {
                     window.location.reload();
@@ -3843,15 +3827,7 @@
         if (!playerConfig) {
             if (typeof onNoContainer === 'function') { onNoContainer(); return; }
             console.warn('未找到当前网站的播放器配置');
-            Swal.fire({
-                title: '暂不支持内嵌',
-                text: '当前页面暂无播放器区域配置，请改用列表中的「弹窗」类接口解析。',
-                icon: 'info',
-                toast: true,
-                position: 'center',
-                timer: 3000,
-                showConfirmButton: false
-            });
+            vipToast('暂不支持内嵌', '当前页面暂无播放器区域配置，请改用列表中的「弹窗」类接口解析。', { icon: 'info', ms: 3000 });
             return;
         }
 
@@ -4000,15 +3976,7 @@
                 clearVipPlaybackTimers();
                 if (typeof onNoContainer === 'function') { onNoContainer(); return; }
                 console.warn('未找到播放器容器');
-                Swal.fire({
-                    title: '未找到播放器区域',
-                    text: '页面结构可能有变化，请尝试「弹窗」解析或刷新后重试。',
-                    icon: 'warning',
-                    toast: true,
-                    position: 'center',
-                    timer: 3000,
-                    showConfirmButton: false
-                });
+                vipToast('未找到播放器区域', '请确认是否处于具体剧集页', { icon: 'warning', ms: 3000 });
             });
     }
 
@@ -4081,15 +4049,7 @@
                 customApis = GM_getValue("custom_parse_apis", []);
                 allApis = [...uniqueApis, ...customApis];
                 renderApiLists();
-                Swal.fire({
-                    title: '刷新成功',
-                    text: '接口列表已重新加载！',
-                    icon: 'success',
-                    toast: true,
-                    position: 'center',
-                    timer: 1500,
-                    showConfirmButton: false
-                });
+                vipToast('刷新成功', '接口列表已重新加载！', { ms: 1500 });
                 break;
             case CONFIG.shortcut.style:
                 e.preventDefault();
