@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         🫧404小站 — 🎬VIP追剧神器 | 完全免费 | 支持多平台 | (电脑/手机/平板...自适应)
 // @namespace    https://scriptcat.org/zh-CN/users/162063
-// @version      3.5.4
+// @version      3.5.5
 // @description  ▶在线VIP视频解析工具 (电脑/手机/平板...自适应) | free | 支持多平台【爱奇艺】【腾讯视频】【优酷土豆】【芒果TV】【乐视视频】【哔哩哔哩】【搜狐视频】等常见平台。✨9条解析接口实测可用 ✨内嵌播放无广告 ✨智能切集追剧 ✨内嵌铺满原播放区 ✨一键自动解析  制作不易，有问题可加微信咨询：Why15236444193 [如果加微信未能及时回复，请多多包涵哈！]
 // @author       yyy404
 // @match        *://*/*
@@ -889,6 +889,16 @@
             font-size: 12px;
             white-space: nowrap;
         }
+        #${CONFIG.vipBoxId} .vip-url-row {
+            padding: 8px 10px 0 10px;
+            font-size: 11px;
+            text-align: left;
+            line-height: 1.5;
+        }
+        #${CONFIG.vipBoxId} .vip-url-row label {
+            cursor: pointer;
+            user-select: none;
+        }
         #${CONFIG.vipBoxId} .collect-filter-row {
             padding: 4px 10px 0 10px;
             font-size: 11px;
@@ -1320,7 +1330,128 @@
 
     function encodeVideoUrl(url) {
         if (!url) return '';
-        return encodeURIComponent(url).replace(/%20/g, '+');
+        // 编码前先做「手机版 → 电脑版」转换（部分解析接口只认电脑版地址）
+        return encodeURIComponent(toDesktopUrl(url)).replace(/%20/g, '+');
+    }
+
+    // ===== 手机网址 → 电脑网址 =====
+    // 部分解析接口只认电脑版页面地址，手机版会解析失败。这里按站点把地址换成电脑版，
+    // 规则按各家 URL 结构分别处理；不在表里的站点原样返回。
+    const DESKTOP_URL_KEY = 'desktop_url_enabled';
+    let desktopUrlEnabled = GM_getValue(DESKTOP_URL_KEY, true);
+    const MOBILE_TO_DESKTOP = [
+        // 爱奇艺：/v_xxx.html 与 /a_xxx.html 都只换域名
+        { re: /^https?:\/\/m\.iqiyi\.com\//i, to: 'https://www.iqiyi.com/' },
+        // 优酷：把各种手机版 id 形式统一成 v_show/id_xxx==.html
+        {
+            re: /^https?:\/\/.+?\/id_([^.=]+?)=?=.*$/i,
+            to: null,
+            build: (u) => {
+                const m = u.match(/id_([^.=?]+)/);
+                return m ? 'https://v.youku.com/v_show/id_' + m[1] + '==.html' : u;
+            }
+        },
+        // 土豆：/v/xxx.html 或 /id_xxx 形式，并到优酷的 v_show 地址
+        {
+            re: /^https?:\/\/[^/]*tudou\.com\/.*$/i,
+            to: null,
+            build: (u) => {
+                const m = u.match(/\/(?:v\/|id_)([^.\/?=]+)/);
+                return m ? 'https://v.youku.com/v_show/id_' + m[1] + '==.html' : u;
+            }
+        },
+        // 芒果TV：/b/xxx.html 原样换域名
+        { re: /^https?:\/\/m\.mgtv\.com\//i, to: 'https://www.mgtv.com/' },
+        // 咪咕视频：m. → www.
+        { re: /^https?:\/\/m\.miguvideo\.com\//i, to: 'https://www.miguvideo.com/' },
+        // PPTV：m. → v.，并去掉 .html 后面的参数
+        {
+            re: /^https?:\/\/m\.pptv\.com\//i,
+            to: null,
+            build: (u) => u.replace(/^https?:\/\/m\./i, 'https://v.').replace(/\.html\?.+$/, '.html')
+        },
+        // 华数：保留 Play/show/id/xxx 路径
+        {
+            re: /^https?:\/\/.+?\/([Pp]lay\/show\/id\/\d*)/,
+            to: null,
+            build: (u) => {
+                const m = u.match(/([Pp]lay\/show\/id\/\d*)/);
+                return m ? 'https://www.wasu.cn/' + m[1] : u;
+            }
+        },
+        // 1905 电影网：/m/vod/xxx.shtml → /vod/play/xxx.shtml
+        {
+            re: /^https?:\/\/m\.1905\.com\/m\/vod\/(\d+?)\.shtml/i,
+            to: null,
+            build: (u) => {
+                const m = u.match(/\/m\/vod\/(\d+?)\.shtml/);
+                return m ? 'https://www.1905.com/vod/play/' + m[1] + '.shtml' : u;
+            }
+        },
+        // B站：只换域名（普通视频与番剧都适用）
+        { re: /^https?:\/\/m\.bilibili\.com\//i, to: 'https://www.bilibili.com/' },
+        // 西瓜视频：/video/xxx → /xxx
+        {
+            re: /^https?:\/\/m\.ixigua\.com\/video\//i,
+            to: null,
+            build: (u) => u.replace(/^https?:\/\/m\.ixigua\.com\/video\//i, 'https://www.ixigua.com/')
+        },
+        // fun.tv：?mid=xxx[&vid=yyy] → /vplay/g-xxx[.v-yyy]
+        {
+            re: /^https?:\/\/.+?\/\?mid=\d+/i,
+            to: null,
+            build: (u) => {
+                let m = u.match(/[?&]mid=(\d+)&vid=(\d+)/i);
+                if (m) return 'https://www.fun.tv/vplay/g-' + m[1] + '.v-' + m[2];
+                m = u.match(/[?&]mid=(\d+)/i);
+                return m ? 'https://www.fun.tv/vplay/g-' + m[1] : u;
+            }
+        },
+        // 搜狐视频：sohu 域名 + ?vid=xxx → /vxxx.shtml
+        {
+            re: /^https?:\/\/[^/]*sohu\.com\/.*[?&]vid=\w+/i,
+            to: null,
+            build: (u) => {
+                const m = u.match(/[?&]vid=(\w+)/i);
+                return m ? 'https://tv.sohu.com/v' + m[1] + '.shtml' : u;
+            }
+        },
+        // 乐视：/vplay_xxx.html → /ptv/vplay/xxx.html
+        {
+            re: /^https?:\/\/.+?\/vplay_(.+?)\.html/i,
+            to: null,
+            build: (u) => {
+                const m = u.match(/\/vplay_(.+?)\.html/i);
+                return m ? 'https://www.le.com/ptv/vplay/' + m[1] + '.html' : u;
+            }
+        },
+        // 腾讯视频：qq 域名 + cid/vid 参数 → /x/cover/cid/vid.html
+        {
+            re: /^https?:\/\/[^/]*qq\.com\/.*[?&](?:cid|vid)=/i,
+            to: null,
+            build: (u) => {
+                let m = u.match(/[?&]cid=(\w+)&vid=(\w+)/i);
+                if (m) return 'https://v.qq.com/x/cover/' + m[1] + '/' + m[2] + '.html';
+                m = u.match(/[?&]cid=(\w+)/i);
+                return m ? 'https://v.qq.com/x/cover/' + m[1] + '.html' : u;
+            }
+        },
+    ];
+
+    // 返回电脑版地址；没有匹配规则、或开关关闭时原样返回
+    function toDesktopUrl(url) {
+        if (!desktopUrlEnabled || !url) return url;
+        // 只处理手机站；电脑站（www./v.）不动
+        if (!/^https?:\/\/m\./i.test(url) && !/[?&](?:cid|vid)=/i.test(url)) return url;
+        for (const rule of MOBILE_TO_DESKTOP) {
+            if (!rule.re.test(url)) continue;
+            try {
+                return rule.build ? rule.build(url) : url.replace(rule.re, rule.to);
+            } catch (e) {
+                return url;
+            }
+        }
+        return url;
     }
 
     // ===================================================================
@@ -2851,6 +2982,9 @@
                     <div class="tab-content active" id="vip-tab">
                         ${simpleApisHtml}
                         ${complexApisHtml}
+                        <div class="vip-url-row">
+                            <label><input type="checkbox" id="desktop-url-chk"> 手机网址自动转电脑网址</label>
+                        </div>
                     </div>
                     <div class="tab-content" id="collect-tab">
                         <div class="collect-night-note">资源采集源一般到晚上容易卡，因为站长服务器带宽不够大，非脚本原因，请勿反馈</div>
@@ -2940,6 +3074,7 @@
         // ===== 采集源 / 导航 标签页 =====
         DOM_CACHE.collectTab = vipBox.querySelector('#collect-tab');
         DOM_CACHE.navTab = vipBox.querySelector('#nav-tab');
+        DOM_CACHE.desktopUrlChk = vipBox.querySelector('#desktop-url-chk');
         DOM_CACHE.collectAutoNextChk = vipBox.querySelector('#collect-auto-next-chk');
         DOM_CACHE.collectKeyword = vipBox.querySelector('#collect-keyword');
         DOM_CACHE.collectStatus = vipBox.querySelector('#collect-status');
@@ -3394,6 +3529,14 @@
     // ⑧ 解析接口列表里的点击（切模式 / 内嵌播放 / 弹窗打开）
     function bindParseEvents(ctx) {
         const { vipBox } = ctx;
+        // 手机网址转电脑网址开关
+        if (DOM_CACHE.desktopUrlChk) {
+            DOM_CACHE.desktopUrlChk.checked = desktopUrlEnabled;
+            DOM_CACHE.desktopUrlChk.addEventListener('change', () => {
+                desktopUrlEnabled = !!DOM_CACHE.desktopUrlChk.checked;
+                GM_setValue(DESKTOP_URL_KEY, desktopUrlEnabled);
+            });
+        }
         vipBox.querySelector('#vip-tab').addEventListener("click", (e) => {
             // 点「内嵌 / 弹窗」那两个字：只有【两种模式都支持】的接口才切得动（它有 data-modes）。
             // 只有一种模式的跟它长得一样但点了不动（不靠手型提示），所以这里必须显式判断，
@@ -3427,8 +3570,10 @@
                 }
             } else {
                 // clean 的接口要"剥掉查询参数 + 不编码"（见 parseApis 里 66网1 的说明）
+                // 同样先做手机版 → 电脑版转换
+                const srcUrl = toDesktopUrl(window.location.href);
                 const tail = videoObj.clean
-                    ? String(window.location.href).split('#')[0].split('?')[0]
+                    ? String(srcUrl).split('#')[0].split('?')[0]
                     : encodeVideoUrl(window.location.href);
                 const parseUrl = videoObj.url + tail;
                 // windowOpen 的接口要用 window.open：GM_openInTab 是扩展发起的标签，通常不带 Referer，
