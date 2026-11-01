@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         🫧404小站 — 🎬VIP追剧神器 | 完全免费 | 支持多平台 | (电脑/手机/平板...自适应)
 // @namespace    https://scriptcat.org/zh-CN/users/162063
-// @version      3.5.6
+// @version      3.5.7
 // @description  ▶在线VIP视频解析工具 (电脑/手机/平板...自适应) | free | 支持多平台【爱奇艺】【腾讯视频】【优酷土豆】【芒果TV】【乐视视频】【哔哩哔哩】【搜狐视频】等常见平台。✨9条解析接口实测可用 ✨内嵌播放无广告 ✨智能切集追剧 ✨内嵌铺满原播放区 ✨一键自动解析  制作不易，有问题可加微信咨询：Why15236444193 [如果加微信未能及时回复，请多多包涵哈！]
 // @author       yyy404
 // @match        *://*/*
@@ -210,16 +210,22 @@
         eco: '#ffa64d',       // ⑤ 橙  —— EcoHub 一家
         ikanbot: '#9db8d1',   // ⑥ 钢蓝灰 —— 爱看机器人（名字带「机器人」，配金属冷色；也是唯一低饱和色，最好认）
         lxyy: '#ff8fb0',      // ⑦ 粉  —— 洛雪TV
-        special: '#ff6b4a'    // ⑧ 朱红 —— 邦宁（原来跟纯绿挨着，现在绿已改蓝绿）
+        yparse: '#7ee787',    // ⑨ 亮绿 —— 云解析（yparse.ik9.cc）
+        pangu: '#ffd166',     // ⑩ 金黄 —— 盘古解析（pangujiexi.com）
+        pm: '#a5d6ff',        // ⑪ 浅蓝 —— PM / m3u8.tv（playm3u8.cn 一家）
+        jiasu: '#ffb86b',     // ⑫ 橙黄 —— 加速7 / 45网（dashu 发过的裸IP接口）
+        special: '#ff6b4a'    // ⑬ 朱红 —— 邦宁 / bd解析 / 154网（无明确归属）
     };
 
     const parseApis = [
-        // ===== 解析接口【只保留已实测可用的 10 条】=====
-        // 这 10 条都是逐条实测确认可用的；历史上删掉的失效条目不再收录。
         // ⚠️ 排列规则：同一家的（同色）挨在一起，且【家族顺序跟导航页 / 搜索跳转一致】
         //    （见 API_MARK_COLOR 的声明顺序）。TXNQ 那家排最前，因为它是实测里最好用的。
+        // ---------- 第一梯队----------
         {"name": "TXNQ", "type": "1,3", "url": "https://bfq.txnp.cn/player?url=", "mark": "txnp"},
         {"name": "酥皮", "type": "1,3", "url": "https://art.txnp.cn/?url=", "mark": "txnp"},
+        {"name": "TXNQ2", "type": "1,3", "url": "https://bfq.txnp.cn/excessive?url=", "mark": "txnp"},
+        {"name": "云解析", "type": "1,3", "url": "https://yparse.ik9.cc/index.php?url=", "mark": "yparse"},
+        {"name": "bd解析", "type": "1,3", "url": "https://bd.jx.cn/?url=", "mark": "special"},
         // ===== 66大片网 / 麒麟 这一家的三个解析入口（同色 = 同一家）=====
         // 命名：66网1/2 = 走 66大片网 的两个入口；麒麟1 = 麒麟自己的接口域名。
         // 66网1：站内跳转入口（= 授权宿主页）。需要"剥 query + 不编码"的形态，所以打 clean 标记
@@ -240,6 +246,15 @@
         // ===== 以下 3 条没有颜色（不属于上面任何一家）=====
         {"name": "七哥", "type": "1,3", "url": "https://jx.202617.xyz/tv.php?url="},
         {"name": "M1907", "type": "1,2,3", "url": "https://im1907.top/?jx="},
+        // ---------- 第三梯队----------     
+        {"name": "盘古", "type": "1,3", "url": "https://www.pangujiexi.com/jiexi/?url=", "mark": "pangu"},
+        {"name": "PM", "type": "1,3", "url": "https://www.playm3u8.cn/jiexi.php?url=", "mark": "pm"},
+        {"name": "m3u8tv", "type": "1,3", "url": "https://jx.m3u8.tv/jiexi/?url=", "mark": "pm"},
+        {"name": "加速7", "type": "1,3", "url": "https://v.jiasu7.top/jx.php?url=", "mark": "jiasu"},
+        // ---------- 第四梯队：实测黑屏 ----------
+        {"name": "45网", "type": "1,3", "url": "http://45.207.198.92:8899/?url=", "mark": "jiasu"},
+        {"name": "154网", "type": "1,3", "url": "http://154.13.4.144:8001/excessive?url=", "mark": "special"},
+        // ---------- 末位：实测拒绝连接 ----------
         {"name": "Node", "type": "1,3", "url": "https://jx.nodenode.dpdns.org/?url="},
     ];
 
@@ -1591,7 +1606,14 @@
                 { name: '无损云搜索', api: 'http://wsyzy.cc/index.php/vod/search.html?wd={kw}&submit=search', fmt: 'search', mark: 'wsyzy' },
                 { name: 'EcoHub站', api: 'https://eco.fe-spark.cn/search?search={kw}', fmt: 'search', mark: 'eco' },
                 { name: '爱看机器人（主）', api: 'https://www.ikanbot.com/search?q={kw}', fmt: 'search', mark: 'ikanbot' },
-                { name: '爱看机器人（备）', api: 'http://ikanbot.eu.org/search?q={kw}', fmt: 'search', mark: 'ikanbot' }
+                { name: '爱看机器人（备）', api: 'http://ikanbot.eu.org/search?q={kw}', fmt: 'search', mark: 'ikanbot' },
+                // ===== 搜索跳转（补充）=====
+                { name: '片库搜索', api: 'https://4k01.pianku.online/vodsearch/-------------.html?wd={kw}', fmt: 'search' },
+                { name: '4k影视搜索', api: 'https://www.4kvm.top/search?q={kw}', fmt: 'search' },
+                { name: '星耀短剧搜索', api: 'https://www.dj991.com/vodsearch/-------------.html?wd={kw}', fmt: 'search' },
+                { name: '春不晚搜索', api: 'https://gd1atx.a.9zy.site/s/{kw}.html', fmt: 'search' },
+                // 磁力猫：关键词要 base64 编码，用 {kw_b64} 占位符
+                { name: '磁力猫搜索', api: 'https://clm52.top/search?word={kw_b64}', fmt: 'search' },
             ]
         },
     ];
@@ -1625,7 +1647,15 @@
         // 以下三条不带颜色（不属于任何一个"家族"）
         { name: '网盘资源导航', url: 'https://wangpanziyuan.pages.dev/', desc: '电子书 / 漫画 / 影视 / 游戏 / 音乐 / 学习资料 / 办公软件的网盘合集，站内标称 10 万+ 资源' },
         { name: '动漫共和国', url: 'https://666.oneghg.com/', desc: '日漫 / 国创 / 经典番剧 / 剧场版免费在线追番，另有安卓 / iOS / Windows 客户端' },
-        { name: '小小漫迷', url: 'https://xxmanmi.com/', desc: '动漫在线观看，另有电影 / 综艺 / 美剧 / 韩剧 / 短剧分类，自带搜索' }
+        { name: '小小漫迷', url: 'https://xxmanmi.com/', desc: '动漫在线观看，另有电影 / 综艺 / 美剧 / 韩剧 / 短剧分类，自带搜索' },
+        // ===== 导航站（补充）=====
+        { name: '片库', url: 'https://4k01.pianku.online/', desc: '影视站，电影 / 剧集 / 动漫，自带搜索（已配搜索跳转）' },
+        { name: '4k影视', url: 'https://www.4kvm.top/', desc: '综合影视站，电影 / 美剧 / 剧集，内容量大（已配搜索跳转）' },
+        { name: '星耀短剧', url: 'https://www.dj991.com/', desc: '短剧专精，2026 全网短剧，另有国漫（已配搜索跳转）' },
+        { name: '春不晚资源网', url: 'https://gd1atx.a.9zy.site/', desc: '网盘资源搜索（夸克 / 百度），电子书 / 影视 / 学习资料（已配搜索跳转）' },
+        { name: '全民解析', url: 'https://www.kuzibang.com/', desc: '解析接口聚合导航，一页列出多个可用解析站' },
+        { name: '小鸡看看', url: 'https://xjggg.top', desc: '影视 App 官网（网页版需登录且无法注册，建议用 App）' },
+        { name: '789技术导航', url: 'https://789bh.com/', desc: '网址导航大全，影视 / 动漫 / 学习 / 工具等分类' }
     ];
 
     const COLLECT_TIMEOUT = 15000;      // 单请求超时(ms)
@@ -1642,7 +1672,7 @@
                                         // 实测搜「斗破」沃云一次返回 20 条，而每条都要一次详情请求 —— 不封顶就会连打 20 次。
     let collectProxyUsed = 0;           // 统计：本次会话成功走代理几次
     let collectProxyFail = 0;           // 连续失败计数
-    // ===== 采集源内嵌播放器（阶段3）=====
+    // ===== 采集源内嵌播放器 =====
     // collectPlayerMode：art = Artplayer；native = 原生 <video controls>
     const COLLECT_PLAYER_KEY = 'collect_player_mode';
     let collectPlayerMode = GM_getValue(COLLECT_PLAYER_KEY, 'art') === 'native' ? 'native' : 'art';
@@ -1679,7 +1709,21 @@
         const kw = encodeURIComponent(keyword);
         // search / woyun：非常规路径，直接套模板
         if (source.fmt === 'search' || source.fmt === 'woyun') {
-            return String(source.api).replace('{kw}', kw);
+            // 磁力猫等站点要求关键词做 base64。
+            // ⚠️ kw 上面已经 encodeURIComponent 过了，所以这里要先 decodeURIComponent 还原成原文，
+            //    再按 UTF-8 转 base64 —— 否则会把 %E5%85%B0 这种百分号编码也编进去（服务端解出来是乱码）。
+            let out = String(source.api);
+            if (out.indexOf('{kw_b64}') >= 0) {
+                let b64 = '';
+                try {
+                    const raw = decodeURIComponent(kw);
+                    b64 = btoa(unescape(encodeURIComponent(raw)));
+                } catch (e) {
+                    b64 = kw;
+                }
+                out = out.replace('{kw_b64}', b64);
+            }
+            return out.replace('{kw}', kw);
         }
         const api = normalizeCollectApi(source.api);
         const sep = api.indexOf('?') >= 0 ? '&' : '?';
@@ -1853,7 +1897,7 @@
                 String(group).split('#').forEach((seg) => {
                     if (!seg) return;
                     // 苹果CMS 的段是「剧集名$地址」。但有的源给的是【裸地址】段，没有 `$` 前缀
-                    // —— 实测 乐园(18) 的 ckplayer 线路就是这样：
+                    // —— 部分采集源的 ckplayer 线路就是这样：
                     //      http://zyznygvideo.m6b3xt5.com/…/hls/encrypt/index.m3u8
                     // 旧写法在这里直接 return，把整段丢掉 ⇒ 该源被判成「返回 1 部，但都取不到播放地址」。
                     // 现在退化成「整段当 url、label 用默认值」，下面那句 /^https?:\/\// 仍然兜底。
