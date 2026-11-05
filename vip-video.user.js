@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         🫧404小站 — 🎬VIP追剧神器 | 完全免费 | 支持多平台 | (电脑/手机/平板...自适应)
 // @namespace    https://scriptcat.org/zh-CN/users/162063
-// @version      3.5.7
+// @version      3.5.8
 // @description  ▶在线VIP视频解析工具 (电脑/手机/平板...自适应) | free | 支持多平台【爱奇艺】【腾讯视频】【优酷土豆】【芒果TV】【乐视视频】【哔哩哔哩】【搜狐视频】等常见平台。✨9条解析接口实测可用 ✨内嵌播放无广告 ✨智能切集追剧 ✨内嵌铺满原播放区 ✨一键自动解析  制作不易，有问题可加微信咨询：Why15236444193 [如果加微信未能及时回复，请多多包涵哈！]
 // @author       yyy404
 // @match        *://*/*
@@ -1611,9 +1611,13 @@
                 { name: '片库搜索', api: 'https://4k01.pianku.online/vodsearch/-------------.html?wd={kw}', fmt: 'search' },
                 { name: '4k影视搜索', api: 'https://www.4kvm.top/search?q={kw}', fmt: 'search' },
                 { name: '星耀短剧搜索', api: 'https://www.dj991.com/vodsearch/-------------.html?wd={kw}', fmt: 'search' },
-                { name: '春不晚搜索', api: 'https://gd1atx.a.9zy.site/s/{kw}.html', fmt: 'search' },
                 // 磁力猫：关键词要 base64 编码，用 {kw_b64} 占位符
                 { name: '磁力猫搜索', api: 'https://clm52.top/search?word={kw_b64}', fmt: 'search' },
+                // ===== 搜索跳转（第三批）=====
+                { name: '量子资源搜索', api: 'https://lzizy.com/index.php/vod/search.html?wd={kw}', fmt: 'search' },
+                { name: '555电影搜索', api: 'https://555k27.com/vodsearch/-------------.html?wd={kw}', fmt: 'search' },
+                { name: '大米星球搜索', api: 'https://dmxq36.com/vodsearch/-------------.html?wd={kw}', fmt: 'search' },
+                { name: 'OmoFun搜索', api: 'https://www.omofun.in/vod/search.html?wd={kw}', fmt: 'search' },
             ]
         },
     ];
@@ -1652,10 +1656,16 @@
         { name: '片库', url: 'https://4k01.pianku.online/', desc: '影视站，电影 / 剧集 / 动漫，自带搜索（已配搜索跳转）' },
         { name: '4k影视', url: 'https://www.4kvm.top/', desc: '综合影视站，电影 / 美剧 / 剧集，内容量大（已配搜索跳转）' },
         { name: '星耀短剧', url: 'https://www.dj991.com/', desc: '短剧专精，2026 全网短剧，另有国漫（已配搜索跳转）' },
-        { name: '春不晚资源网', url: 'https://gd1atx.a.9zy.site/', desc: '网盘资源搜索（夸克 / 百度），电子书 / 影视 / 学习资料（已配搜索跳转）' },
+        { name: '春不晚资源网', url: 'https://gd1atx.a.9zy.site/', desc: '网盘资源搜索（夸克 / 百度），电子书 / 影视 / 学习资料' },
         { name: '全民解析', url: 'https://www.kuzibang.com/', desc: '解析接口聚合导航，一页列出多个可用解析站' },
         { name: '小鸡看看', url: 'https://xjggg.top', desc: '影视 App 官网（网页版需登录且无法注册，建议用 App）' },
-        { name: '789技术导航', url: 'https://789bh.com/', desc: '网址导航大全，影视 / 动漫 / 学习 / 工具等分类' }
+        { name: '789技术导航', url: 'https://789bh.com/', desc: '网址导航大全，影视 / 动漫 / 学习 / 工具等分类' },
+        // ===== 导航站（第三批）=====
+        { name: '港剧网', url: 'https://8kgj.com/', desc: '港剧 / 粤语剧专精，粤语影院；搜索需过系统安全验证' },
+        { name: 'Animoe动漫', url: 'https://animoe.org/', desc: '动漫在线观看；搜索需过系统安全验证' },
+        { name: 'MuteFun动漫', url: 'https://mutedm.com/', desc: '日漫 / 美漫 / 特摄 / 日剧，新番排期；搜索需过安全验证' },
+        { name: '有意思电影导航', url: 'https://yysdy.com/', desc: '电影网址导航，收录大量影视站' },
+        { name: '橘子盘搜', url: 'https://www.nmme.xyz/', desc: '网盘资源搜索引擎，影视 / 电子书 / 学习资料' }
     ];
 
     const COLLECT_TIMEOUT = 15000;      // 单请求超时(ms)
