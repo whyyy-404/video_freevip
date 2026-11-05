@@ -136,7 +136,7 @@
             // 建容器 + iframe。
             // ⚠️ 顺序很关键：必须【先挂 load 监听 → 再进 DOM → 最后才设 src】。
             //    之前用 body.innerHTML 插入，iframe 一进 DOM 就开始导航，
-            //    等我们再回头找它挂监听时已经错过 load，表现就是「永远加载不出来」。
+            //    等回头再找它挂监听时已经错过 load，表现就是「永远加载不出来」。
             // 容器用 fixed + 视口单位，不吃 body 的高度（宿主页自己有 360 KB 的 CSS，body 高度不可靠）
             gateWrap = document.createElement('div');
             gateWrap.id = 'vip_gate_wrap';
@@ -195,7 +195,7 @@
     //    所以用实色 hex（不要带透明度）：文字色一旦半透明就会发灰、看不清。
     //    底色是深灰 #2c2e34，所以这些颜色都偏亮 —— 亮色在深底上才读得清。
     // ⚠️ 排列规则：同一家（同色）必须挨在一起，而且【三个分区的家族顺序必须一致】——
-    //    下面这个声明顺序就是家族顺序：导航页 / 搜索跳转 / 解析接口 都按它排。
+    //    声明顺序即家族顺序：导航页 / 搜索跳转 / 解析接口 都按它排。
     //    各家的顺序在三个分区里完全相同，看熟一个分区就够了。
     // ⚠️ 配色尽量照顾色觉障碍（红绿色弱最常见）：
     //    ① 不用纯红+纯绿这一对（红绿色弱下会混成相近的黄褐色）⇒ 66网一家改用【蓝绿 teal】
@@ -1538,7 +1538,7 @@
         {
             // 和上面「✅ 可用」是同一类结果（直连就能搜到），单独成组只因为【形状不同】：
             //   它搜索只返回视频 ID，播放地址要再按 ID 问一次详情 ⇒ 多一次请求，稍慢。
-            // 这是【格式】差异，不是【策略】：对方没有拒绝我们，只是话不一样。
+            // 这是【格式】差异，不是【策略】：对方并非拒绝，只是返回内容不同。
             sec: '采集源', src: '✅ 可用 · 稍慢',
             items: [
                 { name: '沃云', api: 'http://zhibo.jishuwo.com/api/so/index.php?wd={kw}', fmt: 'woyun', detail: 'http://zhibo.jishuwo.com/api/so/index.php?ac=detail&id={id}', hit: true }
@@ -1679,7 +1679,7 @@
     const COLLECT_PROXY_MAXFAIL = 3;    // 代理连续失败几次，就本次会话停用代理
     const COLLECT_LIST_MAXPAGE = 2;     // 「翻最近列表」兜底最多翻几页（每页 20 条，写死防止无限翻）
     const COLLECT_TWOSTEP_MAX = 3;      // 「两步型」源（沃云）搜索命中很多时，最多跟几条去取详情。
-                                        // 实测搜「斗破」沃云一次返回 20 条，而每条都要一次详情请求 —— 不封顶就会连打 20 次。
+                                        // 实测搜索热门剧名时沃云一次可能返回 20 条，而每条都要一次详情请求 —— 不封顶就会连打 20 次。
     let collectProxyUsed = 0;           // 统计：本次会话成功走代理几次
     let collectProxyFail = 0;           // 连续失败计数
     // ===== 采集源内嵌播放器 =====
@@ -3834,12 +3834,12 @@
         } catch (e) {}
     }
 
-    // 判断元素是否在我们自己的解析播放器内（跨域 iframe 天然隔离，这里再显式兜底）
+    // 判断元素是否在本脚本的解析播放器内（跨域 iframe 天然隔离，这里再显式兜底）
     function isInsideOurPlayer(el) {
         return !!(el && el.closest && el.closest('.vip_jx_iframe_wrapper'));
     }
 
-    // 扫描指定作用域内的 video/audio，跳过我们自己的播放器
+    // 扫描指定作用域内的 video/audio，跳过本脚本的播放器
     function mutePageMediaInScope(scope) {
         const root = scope && scope.querySelectorAll ? scope : document;
         root.querySelectorAll('video, audio').forEach((media) => {
@@ -3868,7 +3868,7 @@
             stopPageMedia(this);
             return Promise.resolve();
         };
-        // 三个事件要做的动作完全一样：页面自己的 video/audio 一响就掐掉它（我们自己播放器里的放过）。
+        // 三个事件要做的动作完全一样：页面自己的 video/audio 一响就掐掉它（本脚本播放器里的放过）。
         // 原来三个回调体一字不差地抄了三遍 —— 写成一个处理函数、循环绑定，完全等价。
         const stopForeignMedia = (event) => {
             if (event.target instanceof HTMLMediaElement && !isInsideOurPlayer(event.target)) {
