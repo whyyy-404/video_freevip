@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         🫧404小站 — 🎬VIP追剧神器 | 完全免费 | 支持多平台 | (电脑/手机/平板...自适应)
 // @namespace    https://scriptcat.org/zh-CN/users/162063
-// @version      3.5.9
+// @version      3.6.0
 // @description  ▶在线VIP视频解析工具 (电脑/手机/平板...自适应) | free | 支持多平台【爱奇艺】【腾讯视频】【优酷土豆】【芒果TV】【乐视视频】【哔哩哔哩】【搜狐视频】等常见平台。✨9条解析接口实测可用 ✨内嵌播放无广告 ✨智能切集追剧 ✨内嵌铺满原播放区 ✨一键自动解析  制作不易，有问题可加微信咨询：Why15236444193 [如果加微信未能及时回复，请多多包涵哈！]
 // @author       yyy404
 // @match        *://*/*
@@ -13,6 +13,7 @@
 // @grant        GM_xmlhttpRequest
 // @resource     hlsJs       https://gcore.jsdelivr.net/npm/hls.js@1.7.3/dist/hls.min.js
 // @resource     artPlayerJs https://gcore.jsdelivr.net/npm/artplayer@5.4.0/dist/artplayer.js
+// @resource     m3u8Filter  https://cdn.jsdelivr.net/gh/whyyy-404/video_freevip@main/M3u8Filter.user.js
 // @grant        GM_getResourceText
 // @connect      *
 // @run-at       document-start
@@ -219,8 +220,8 @@
 
     const parseApis = [
         // ⚠️ 排列规则：同一家的（同色）挨在一起，且【家族顺序跟导航页 / 搜索跳转一致】
-        //    （见 API_MARK_COLOR 的声明顺序）。TXNQ 那家排最前，因为它是实测里最好用的。
-        // ---------- 第一梯队----------
+        //    （见 API_MARK_COLOR 的声明顺序）。可用性好的排在前面。
+        // ---------- 第一组：可用性最好，优先显示 ----------
         {"name": "TXNQ", "type": "1,3", "url": "https://bfq.txnp.cn/player?url=", "mark": "txnp"},
         {"name": "酥皮", "type": "1,3", "url": "https://art.txnp.cn/?url=", "mark": "txnp"},
         {"name": "TXNQ2", "type": "1,3", "url": "https://bfq.txnp.cn/excessive?url=", "mark": "txnp"},
@@ -249,15 +250,15 @@
         // ===== 以下 3 条没有颜色（不属于上面任何一家）=====
         {"name": "七哥", "type": "1,3", "url": "https://jx.202617.xyz/tv.php?url="},
         {"name": "M1907", "type": "1,2,3", "url": "https://im1907.top/?jx="},
-        // ---------- 第三梯队----------     
+        // ---------- 第三组：响应不稳定，保留备用 ----------     
         {"name": "盘古", "type": "1,3", "url": "https://www.pangujiexi.com/jiexi/?url=", "mark": "pangu"},
         {"name": "PM", "type": "1,3", "url": "https://www.playm3u8.cn/jiexi.php?url=", "mark": "pm"},
         {"name": "m3u8tv", "type": "1,3", "url": "https://jx.m3u8.tv/jiexi/?url=", "mark": "pm"},
         {"name": "加速7", "type": "1,3", "url": "https://v.jiasu7.top/jx.php?url=", "mark": "jiasu"},
-        // ---------- 第四梯队：实测黑屏 ----------
+        // ---------- 第四组：播放异常，保留备用 ----------
         {"name": "45网", "type": "1,3", "url": "http://45.207.198.92:8899/?url=", "mark": "jiasu"},
         {"name": "154网", "type": "1,3", "url": "http://154.13.4.144:8001/excessive?url=", "mark": "special"},
-        // ---------- 末位：实测拒绝连接 ----------
+        // ---------- 末组：连接异常，保留备用 ----------
         {"name": "Node", "type": "1,3", "url": "https://jx.nodenode.dpdns.org/?url="},
     ];
 
@@ -1371,6 +1372,11 @@
     // 规则按各家 URL 结构分别处理；不在表里的站点原样返回。
     const DESKTOP_URL_KEY = 'desktop_url_enabled';
     let desktopUrlEnabled = GM_getValue(DESKTOP_URL_KEY, true);
+
+    // ===== 广告过滤开关 =====
+    // 在播放 iframe 里注入 M3u8Filter，拦截 XHR/fetch 返回的 m3u8，删掉插播广告片段
+    const AD_FILTER_KEY = 'vip_ad_filter_enabled';
+    let adFilterEnabled = GM_getValue(AD_FILTER_KEY, true);   // 默认开
     const MOBILE_TO_DESKTOP = [
         // 爱奇艺：/v_xxx.html 与 /a_xxx.html 都只换域名
         { re: /^https?:\/\/m\.iqiyi\.com\//i, to: 'https://www.iqiyi.com/' },
@@ -2175,6 +2181,8 @@
     function buildPlayerHtml(videoUrl, mode) {
         const hlsSrc = getPlayerLib('hlsJs');
         const artSrc = mode === 'art' ? getPlayerLib('artPlayerJs') : '';
+        // 广告过滤器：必须在 hls.js 之前注入（它要劫持 XHR/fetch）
+        const adSrc = adFilterEnabled ? getPlayerLib('m3u8Filter') : '';
         const urlJs = JSON.stringify(String(videoUrl || ''));
 
         const initNative = '(function(){'
@@ -2217,6 +2225,7 @@
             + '#wrap{width:100%;height:100%;}'
             + '.err{color:#ff8080;font:12px/1.6 sans-serif;padding:12px;}</style>'
             + '</head><body><div id="wrap"></div>'
+            + (adSrc ? '<script>' + escapeInlineScript(adSrc) + '<\/script>' : '')
             + '<script>' + escapeInlineScript(hlsSrc) + '<\/script>'
             + (artSrc ? '<script>' + escapeInlineScript(artSrc) + '<\/script>' : '')
             + '<script>' + (mode === 'art' ? initArt : initNative) + '<\/script>'
@@ -3056,6 +3065,9 @@
                         <div class="vip-url-row">
                             <label><input type="checkbox" id="desktop-url-chk"> 手机网址自动转电脑网址</label>
                         </div>
+                        <div class="vip-url-row">
+                            <label><input type="checkbox" id="ad-filter-chk"> 播放时过滤 m3u8 插播广告</label>
+                        </div>
                     </div>
                     <div class="tab-content" id="collect-tab">
                         <div class="collect-night-note">资源采集源一般到晚上容易卡，因为站长服务器带宽不够大，非脚本原因，请勿反馈</div>
@@ -3146,6 +3158,7 @@
         DOM_CACHE.collectTab = vipBox.querySelector('#collect-tab');
         DOM_CACHE.navTab = vipBox.querySelector('#nav-tab');
         DOM_CACHE.desktopUrlChk = vipBox.querySelector('#desktop-url-chk');
+        DOM_CACHE.adFilterChk = vipBox.querySelector('#ad-filter-chk');
         DOM_CACHE.collectAutoNextChk = vipBox.querySelector('#collect-auto-next-chk');
         DOM_CACHE.collectKeyword = vipBox.querySelector('#collect-keyword');
         DOM_CACHE.collectStatus = vipBox.querySelector('#collect-status');
@@ -3606,6 +3619,14 @@
             DOM_CACHE.desktopUrlChk.addEventListener('change', () => {
                 desktopUrlEnabled = !!DOM_CACHE.desktopUrlChk.checked;
                 GM_setValue(DESKTOP_URL_KEY, desktopUrlEnabled);
+            });
+        }
+        // 广告过滤开关
+        if (DOM_CACHE.adFilterChk) {
+            DOM_CACHE.adFilterChk.checked = adFilterEnabled;
+            DOM_CACHE.adFilterChk.addEventListener('change', () => {
+                adFilterEnabled = !!DOM_CACHE.adFilterChk.checked;
+                GM_setValue(AD_FILTER_KEY, adFilterEnabled);
             });
         }
         vipBox.querySelector('#vip-tab').addEventListener("click", (e) => {
