@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         🫧404小站 — 🎬VIP追剧神器 | 完全免费 | 支持多平台 | (电脑/手机/平板...自适应)
 // @namespace    https://scriptcat.org/zh-CN/users/162063
-// @version      3.5.8
+// @version      3.5.9
 // @description  ▶在线VIP视频解析工具 (电脑/手机/平板...自适应) | free | 支持多平台【爱奇艺】【腾讯视频】【优酷土豆】【芒果TV】【乐视视频】【哔哩哔哩】【搜狐视频】等常见平台。✨9条解析接口实测可用 ✨内嵌播放无广告 ✨智能切集追剧 ✨内嵌铺满原播放区 ✨一键自动解析  制作不易，有问题可加微信咨询：Why15236444193 [如果加微信未能及时回复，请多多包涵哈！]
 // @author       yyy404
 // @match        *://*/*
@@ -11,12 +11,12 @@
 // @grant        GM_setValue
 // @grant        GM_openInTab
 // @grant        GM_xmlhttpRequest
-// @resource     hlsJs       https://cdn.jsdelivr.net/npm/hls.js@1.7.3/dist/hls.min.js
-// @resource     artPlayerJs https://cdn.jsdelivr.net/npm/artplayer@5.4.0/dist/artplayer.js
+// @resource     hlsJs       https://gcore.jsdelivr.net/npm/hls.js@1.7.3/dist/hls.min.js
+// @resource     artPlayerJs https://gcore.jsdelivr.net/npm/artplayer@5.4.0/dist/artplayer.js
 // @grant        GM_getResourceText
 // @connect      *
 // @run-at       document-start
-// @icon         https://cdn.jsdmirror.com/gh/whyyy-404/icon@main/Collection/Cartoon/bear-yes.gif
+// @icon         https://gcore.jsdelivr.net/gh/whyyy-404/icon@main/Collection/Cartoon/bear-yes.gif
 // ==/UserScript==
 // ===========================================================================
 // 【致谢与来源】
@@ -146,7 +146,7 @@
 
             const ifrEl = document.createElement('iframe');
             ifrEl.setAttribute('frameborder', '0');
-            ifrEl.setAttribute('allow', 'autoplay; fullscreen; encrypted-media; picture-in-picture');
+            ifrEl.setAttribute('allow', 'autoplay; fullscreen *; encrypted-media; picture-in-picture');
             ifrEl.setAttribute('allowfullscreen', 'true');
             ifrEl.style.cssText = 'display:block;position:absolute;top:0;left:0;width:100%;height:100%;'
                 + 'border:0;margin:0;padding:0;';
@@ -226,6 +226,9 @@
         {"name": "TXNQ2", "type": "1,3", "url": "https://bfq.txnp.cn/excessive?url=", "mark": "txnp"},
         {"name": "云解析", "type": "1,3", "url": "https://yparse.ik9.cc/index.php?url=", "mark": "yparse"},
         {"name": "bd解析", "type": "1,3", "url": "https://bd.jx.cn/?url=", "mark": "special"},
+        // 臻享 / 789：两家独立解析，都支持内嵌 + 弹窗，暂无专属颜色
+        {"name": "臻享", "type": "1,3", "url": "https://aibox.eu.org/?url="},
+        {"name": "789", "type": "1,3", "url": "https://jiexi.789jiexi.com/?url="},
         // ===== 66大片网 / 麒麟 这一家的三个解析入口（同色 = 同一家）=====
         // 命名：66网1/2 = 走 66大片网 的两个入口；麒麟1 = 麒麟自己的接口域名。
         // 66网1：站内跳转入口（= 授权宿主页）。需要"剥 query + 不编码"的形态，所以打 clean 标记
@@ -272,7 +275,7 @@
 
     const vipBoxId = 'vip_jx_box_' + Math.ceil(Math.random() * 100000000);
 
-    const VIP_ICON_CDN = 'https://cdn.jsdmirror.com/gh/whyyy-404/icon@main/Collection/Cartoon';
+    const VIP_ICON_CDN = 'https://gcore.jsdelivr.net/gh/whyyy-404/icon@main/Collection/Cartoon';
     const VIP_ICON_GIF = {
         idle: `${VIP_ICON_CDN}/bear-idle.gif`,
         drag: `${VIP_ICON_CDN}/bear-drag.gif`,
@@ -1679,7 +1682,7 @@
     const COLLECT_PROXY_MAXFAIL = 3;    // 代理连续失败几次，就本次会话停用代理
     const COLLECT_LIST_MAXPAGE = 2;     // 「翻最近列表」兜底最多翻几页（每页 20 条，写死防止无限翻）
     const COLLECT_TWOSTEP_MAX = 3;      // 「两步型」源（沃云）搜索命中很多时，最多跟几条去取详情。
-                                        // 实测搜索热门剧名时沃云一次可能返回 20 条，而每条都要一次详情请求 —— 不封顶就会连打 20 次。
+    // 实测搜索热门剧名（斗破）时沃云一次可能返回 20 条，而每条都要一次详情请求 —— 不封顶就会连打 20 次。
     let collectProxyUsed = 0;           // 统计：本次会话成功走代理几次
     let collectProxyFail = 0;           // 连续失败计数
     // ===== 采集源内嵌播放器 =====
@@ -1688,7 +1691,7 @@
     let collectPlayerMode = GM_getValue(COLLECT_PLAYER_KEY, 'art') === 'native' ? 'native' : 'art';
     // 两个库用 @resource 注册，只在真要播的时候才取出来注入 iframe（不给每个页面拖负担）
     const COLLECT_PLAYER_SANDBOX = 'allow-scripts allow-same-origin';
-    const COLLECT_PLAYER_ALLOW = 'autoplay; fullscreen; encrypted-media';
+    const COLLECT_PLAYER_ALLOW = 'autoplay; fullscreen *; encrypted-media';
     // 自动下一集：默认开（用户定的），开关在采集源标签页
     const COLLECT_NEXT_KEY = 'collect_auto_next';
     let collectAutoNext = GM_getValue(COLLECT_NEXT_KEY, true);
@@ -4088,7 +4091,7 @@
                     iframe.src = parseUrl;
                 }
                 iframe.frameBorder = '0';
-                iframe.allow = 'autoplay; encrypted-media; fullscreen';
+                iframe.allow = 'autoplay; encrypted-media; fullscreen *';
                 iframe.allowFullscreen = true;
                 iframe.referrerPolicy = 'no-referrer';
                 applyInlineStyles(iframe, frameLayout.iframeStyles);
