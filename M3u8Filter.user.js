@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         M3U8 广告过滤器
 // @namespace    https://github.com/whyyy-404/video_freevip
-// @version      1.0.0
+// @version      1.0.1
 // @description  拦截 m3u8 播放列表，删除插播广告片段（支持 ppvod 标记、路径占比、时长特征三种策略）
 // @author       yyy404
 // @match        *://*/*
@@ -400,6 +400,289 @@
     }
 
     /**
+     * 策略 ④：两路径时，删总时长短的那一路
+     * 场景：正片走 CDN-A，广告走 CDN-B，两条路径各自成段
+     * 判据：路径只有 2 组，且两组总时长差 >= 3 倍
+     */
+    function removeShorterPath(text, opts) {
+        opts = opts || {};
+        var minRatio = opts.minRatio || 3;
+
+        var segs = parseSegments(text);
+        if (segs.length < 20) {
+            return { text: text, removed: 0, strategy: 'shorterPath', reason: '片段太少(' + segs.length + ')' };
+        }
+
+        // 按前缀分组并累计时长
+        var groups = {};
+        segs.forEach(function (s) {
+            if (!groups[s.prefix]) groups[s.prefix] = { segs: [], dur: 0 };
+            groups[s.prefix].segs.push(s);
+            groups[s.prefix].dur += s.dur;
+        });
+
+        var prefixes = Object.keys(groups);
+        // 只处理「恰好 2 组」的情况，多于 2 组交给策略②
+        if (prefixes.length !== 2) {
+            return {
+                text: text, removed: 0, strategy: 'shorterPath',
+                reason: '路径 ' + prefixes.length + ' 组（只处理 2 组）'
+            };
+        }
+
+        var a = { prefix: prefixes[0], dur: groups[prefixes[0]].dur, count: groups[prefixes[0]].segs.length };
+        var b = { prefix: prefixes[1], dur: groups[prefixes[1]].dur, count: groups[prefixes[1]].segs.length };
+
+        // 时长比判据：短的 × minRatio <= 长的
+        var shorter = a.dur <= b.dur ? a : b;
+        var longer = a.dur <= b.dur ? b : a;
+
+        if (shorter.dur <= 0 || longer.dur <= 0) {
+            return { text: text, removed: 0, strategy: 'shorterPath', reason: '时长异常' };
+        }
+
+        var ratio = longer.dur / shorter.dur;
+        if (ratio < minRatio) {
+            return {
+                text: text, removed: 0, strategy: 'shorterPath',
+                reason: '时长比 ' + ratio.toFixed(2) + ' < ' + minRatio + '（差异不够大）'
+            };
+        }
+
+        // 保险：要删的片段数不能超过要留的
+        if (shorter.count > longer.count) {
+            return {
+                text: text, removed: 0, strategy: 'shorterPath',
+                reason: '要删 ' + shorter.count + ' > 要留 ' + longer.count
+            };
+        }
+
+        // 执行删除
+        var del = {};
+        groups[shorter.prefix].segs.forEach(function (sg) {
+            del[sg.lineIdx] = true;
+            del[sg.urlLineIdx] = true;
+        });
+
+        var lines = text.split(/\r?\n/);
+        var out = [];
+        for (var i = 0; i < lines.length; i++) {
+            if (!del[i]) out.push(lines[i]);
+        }
+
+        log('双路径型删除: ' + shorter.prefix + '（' + shorter.dur.toFixed(1) + 's）保留 ' + longer.prefix + '（' + longer.dur.toFixed(1) + 's）');
+        return {
+            text: out.join('\n'),
+            removed: shorter.count,
+            strategy: 'shorterPath',
+            detail: { kept: longer.prefix, keptDur: longer.dur, deleted: shorter.prefix, deletedDur: shorter.dur, ratio: ratio }
+        };
+    }
+
+    /**
+     * 策略 ⑤：按 EXTINF 时长众数删
+     * 场景：正片全是 4.000000s，广告是 3s / 1.76s 等非众数
+     * 判据：某个时长占比 >= 98.7%（说明正片时长高度统一）
+     * 保护：首尾片段永不删
+     */
+    function removeByDurationMode(text, opts) {
+        opts = opts || {};
+        var minRatio = opts.durationModeRatio || 0.95;
+
+        var lines = text.split(/\r?\n/);
+        var segs = parseSegments(text);
+        if (segs.length < 50) {
+            return { text: text, removed: 0, strategy: 'durationMode', reason: '片段太少(' + segs.length + ')' };
+        }
+
+        // 统计时长分布
+        var counts = {};
+        segs.forEach(function (s) {
+            var k = s.dur.toFixed(6);
+            counts[k] = (counts[k] || 0) + 1;
+        });
+
+        var maxKey = '', maxCount = 0;
+        Object.keys(counts).forEach(function (k) {
+            if (counts[k] > maxCount) { maxCount = counts[k]; maxKey = k; }
+        });
+
+        var ratio = maxCount / segs.length;
+        if (ratio < minRatio) {
+            return {
+                text: text, removed: 0, strategy: 'durationMode',
+                reason: '众数占比 ' + (ratio * 100).toFixed(1) + '% < ' + (minRatio * 100) + '%'
+            };
+        }
+
+        var modeDur = parseFloat(maxKey);
+
+        // 收集非众数片段（跳过首尾）
+        var toDelete = [];
+        for (var i = 1; i < segs.length - 1; i++) {
+            if (Math.abs(segs[i].dur - modeDur) > 0.0001) toDelete.push(segs[i]);
+        }
+
+        if (!toDelete.length) {
+            return { text: text, removed: 0, strategy: 'durationMode', reason: '没有非众数片段' };
+        }
+
+        // 保险：要删的不能超过要留的
+        if (toDelete.length >= maxCount) {
+            return {
+                text: text, removed: 0, strategy: 'durationMode',
+                reason: '要删 ' + toDelete.length + ' >= 众数 ' + maxCount
+            };
+        }
+
+        var del = {};
+        toDelete.forEach(function (sg) {
+            del[sg.lineIdx] = true;
+            del[sg.urlLineIdx] = true;
+        });
+
+        var out = [];
+        for (var j = 0; j < lines.length; j++) {
+            if (!del[j]) out.push(lines[j]);
+        }
+
+        log('时长众数型删除: ' + toDelete.length + ' 个（众数 ' + modeDur + 's，占 ' + (ratio * 100).toFixed(1) + '%）');
+        return {
+            text: out.join('\n'),
+            removed: toDelete.length,
+            strategy: 'durationMode',
+            detail: { modeDur: modeDur, modeRatio: ratio, deleted: toDelete.length }
+        };
+    }
+
+    /**
+     * 策略 ⑥：按 ts URL 长度众数删
+     * 场景：正片 URL 长度一致（如 xxx000001.ts），广告 URL 长度不同
+     * 判据：某个 URL 长度占比 >= 78.9%
+     */
+    function removeByUrlLengthMode(text, opts) {
+        opts = opts || {};
+        var minRatio = opts.urlLengthRatio || 0.789;
+
+        var lines = text.split(/\r?\n/);
+        var segs = parseSegments(text);
+        if (segs.length < 50) {
+            return { text: text, removed: 0, strategy: 'urlLengthMode', reason: '片段太少(' + segs.length + ')' };
+        }
+
+        // 统计 URL 长度分布
+        var counts = {};
+        segs.forEach(function (s) {
+            counts[s.url.length] = (counts[s.url.length] || 0) + 1;
+        });
+
+        var maxLen = 0, maxCount = 0;
+        Object.keys(counts).forEach(function (k) {
+            if (counts[k] > maxCount) { maxCount = counts[k]; maxLen = parseInt(k, 10); }
+        });
+
+        var ratio = maxCount / segs.length;
+        if (ratio < minRatio) {
+            return {
+                text: text, removed: 0, strategy: 'urlLengthMode',
+                reason: '长度众数占比 ' + (ratio * 100).toFixed(1) + '% < ' + (minRatio * 100) + '%'
+            };
+        }
+
+        // 收集长度不是众数的片段
+        var toDelete = segs.filter(function (s) { return s.url.length !== maxLen; });
+
+        if (!toDelete.length) {
+            return { text: text, removed: 0, strategy: 'urlLengthMode', reason: '没有异常长度的片段' };
+        }
+
+        // 保险：要删的不能超过要留的
+        if (toDelete.length >= maxCount) {
+            return {
+                text: text, removed: 0, strategy: 'urlLengthMode',
+                reason: '要删 ' + toDelete.length + ' >= 众数 ' + maxCount
+            };
+        }
+
+        var del = {};
+        toDelete.forEach(function (sg) {
+            del[sg.lineIdx] = true;
+            del[sg.urlLineIdx] = true;
+        });
+
+        var out = [];
+        for (var j = 0; j < lines.length; j++) {
+            if (!del[j]) out.push(lines[j]);
+        }
+
+        log('URL长度众数型删除: ' + toDelete.length + ' 个（众数长度 ' + maxLen + '，占 ' + (ratio * 100).toFixed(1) + '%）');
+        return {
+            text: out.join('\n'),
+            removed: toDelete.length,
+            strategy: 'urlLengthMode',
+            detail: { modeLen: maxLen, modeRatio: ratio, deleted: toDelete.length }
+        };
+    }
+
+    /**
+     * 策略 ⑦：修 EXTINF 与 ts 的配对
+     * 场景：m3u8 里 #EXTINF 比 ts 多（或错位），导致播放器卡顿/跳片
+     * 做法：只保留「紧跟着 #EXTINF 的 ts」，孤立的 #EXTINF 丢掉
+     */
+    function repairExtinfPairs(text) {
+        var lines = text.split(/\r?\n/);
+        var out = [];
+        var changes = 0;
+        var orphanExtinf = 0;
+
+        for (var i = 0; i < lines.length; i++) {
+            var t = lines[i].trim();
+
+            if (/^#EXTINF/i.test(t)) {
+                // 找下一个非空行
+                var j = i + 1;
+                while (j < lines.length && lines[j].trim() === '') j++;
+                var next = (j < lines.length) ? lines[j].trim() : '';
+
+                if (next && next.charAt(0) !== '#') {
+                    // 正常配对：EXTINF + URL 一起保留
+                    out.push(lines[i]);
+                    for (var k = i + 1; k < j; k++) out.push(lines[k]);
+                    out.push(lines[j]);
+                    i = j;
+                } else {
+                    // 孤儿 EXTINF：丢掉
+                    orphanExtinf++;
+                    changes++;
+                }
+                continue;
+            }
+
+            // 孤立的 URL 行（前面没有 EXTINF）也丢掉
+            if (t && t.charAt(0) !== '#' && !/^#/.test(t)) {
+                var prevNonEmpty = '';
+                for (var p = out.length - 1; p >= 0; p--) {
+                    if (out[p].trim() !== '') { prevNonEmpty = out[p].trim(); break; }
+                }
+                if (!/^#EXTINF/i.test(prevNonEmpty)) {
+                    // 孤立 URL，丢掉
+                    changes++;
+                    continue;
+                }
+            }
+
+            out.push(lines[i]);
+        }
+
+        return {
+            text: out.join('\n'),
+            changes: changes,
+            orphanExtinf: orphanExtinf,
+            strategy: 'repairExtinf'
+        };
+    }
+
+    /**
      * 修正元数据
      *  ① 重算 #EXT-X-TARGETDURATION（取最大片段时长，向上取整）
      *  ② 确保有 #EXT-X-ENDLIST
@@ -410,10 +693,16 @@
         var changes = [];
 
         // ① TARGETDURATION
+        // 算法：max + min（比单纯 ceil(max) 更宽松，防止播放器因为目标时长偏小卡顿）
         if (segs.length) {
             var maxDur = 0;
-            segs.forEach(function (s) { if (s.dur > maxDur) maxDur = s.dur; });
-            var target = Math.ceil(maxDur);
+            var minDur = Infinity;
+            segs.forEach(function (s) {
+                if (s.dur > maxDur) maxDur = s.dur;
+                if (s.dur < minDur) minDur = s.dur;
+            });
+            if (!isFinite(minDur)) minDur = 0;
+            var target = Math.ceil(maxDur + minDur);
             var found = false;
             for (var i = 0; i < lines.length; i++) {
                 if (/^#EXT-X-TARGETDURATION/i.test(lines[i].trim())) {
@@ -505,6 +794,42 @@
             }
         }
 
+        // 策略 ④：双路径型（只处理恰好 2 组路径）
+        if (opts.useShorterPath !== false) {
+            var r4 = removeShorterPath(cur, opts);
+            if (r4.removed > 0) {
+                result.strategies.push({ name: '双路径型', removed: r4.removed, detail: r4.detail });
+                result.log.push('双路径型: 删除 ' + r4.removed + ' 个片段');
+                cur = r4.text;
+            } else if (r4.reason) {
+                result.log.push('双路径型跳过: ' + r4.reason);
+            }
+        }
+
+        // 策略 ⑤：时长众数型
+        if (opts.useDurationMode) {
+            var r5 = removeByDurationMode(cur, opts);
+            if (r5.removed > 0) {
+                result.strategies.push({ name: '时长众数型', removed: r5.removed, detail: r5.detail });
+                result.log.push('时长众数型: 删除 ' + r5.removed + ' 个片段');
+                cur = r5.text;
+            } else if (r5.reason) {
+                result.log.push('时长众数型跳过: ' + r5.reason);
+            }
+        }
+
+        // 策略 ⑥：URL 长度众数型
+        if (opts.useUrlLengthMode) {
+            var r6 = removeByUrlLengthMode(cur, opts);
+            if (r6.removed > 0) {
+                result.strategies.push({ name: 'URL长度众数型', removed: r6.removed, detail: r6.detail });
+                result.log.push('URL长度众数型: 删除 ' + r6.removed + ' 个片段');
+                cur = r6.text;
+            } else if (r6.reason) {
+                result.log.push('URL长度众数型跳过: ' + r6.reason);
+            }
+        }
+
         // 策略 ③：时长型
         if (opts.useDiscontinuity) {
             var r3 = removeDiscontinuityAds(cur, opts);
@@ -523,6 +848,16 @@
             if (r4.changes.length) {
                 result.log.push('元数据: ' + r4.changes.join('; '));
                 cur = r4.text;
+            }
+        }
+
+        // 策略 ⑦：修 EXTINF 配对（默认开，防止播放器卡顿）
+        if (opts.repairExtinf !== false) {
+            var r7 = repairExtinfPairs(cur);
+            if (r7.changes > 0) {
+                result.strategies.push({ name: 'EXTINF配对修复', removed: 0, changes: r7.changes });
+                result.log.push('EXTINF配对修复: 清理 ' + r7.changes + ' 处（孤儿 EXTINF ' + r7.orphanExtinf + ' 个）');
+                cur = r7.text;
             }
         }
 
@@ -684,7 +1019,7 @@
      * ====================================================================== */
 
     window.__M3U8F__ = {
-        version: '1.0.0',
+        version: '1.0.1',
 
         // 纯函数，可单独测试
         isM3U8: isM3U8,
@@ -694,6 +1029,10 @@
         removeMarkedBlocks: removeMarkedBlocks,
         removeMinorityPaths: removeMinorityPaths,
         removeDiscontinuityAds: removeDiscontinuityAds,
+        removeShorterPath: removeShorterPath,
+        removeByDurationMode: removeByDurationMode,
+        removeByUrlLengthMode: removeByUrlLengthMode,
+        repairExtinfPairs: repairExtinfPairs,
         fixMetadata: fixMetadata,
         filterM3U8: filterM3U8,
 
@@ -709,11 +1048,15 @@
             console.log('  __M3U8F__.filterM3U8(文本)              测试过滤（返回 {text, result}）');
             console.log('  __M3U8F__.parseSegments(文本)           解析片段');
             console.log('  __M3U8F__.removeMinorityPaths(文本)     只测占比型');
+            console.log('  __M3U8F__.removeShorterPath(文本)       只测双路径型');
+            console.log('  __M3U8F__.removeByDurationMode(文本)    只测时长众数型');
+            console.log('  __M3U8F__.removeByUrlLengthMode(文本)   只测URL长度众数型');
+            console.log('  __M3U8F__.repairExtinfPairs(文本)       只测EXTINF配对修复');
             console.log('  __M3U8F__.removeMarkedBlocks(文本)      只测标记型');
             console.log('  __M3U8F__.fixMetadata(文本)             只测元数据修正');
             console.log('  __M3U8F__.debug(false)                  关闭日志');
         }
     };
 
-    log('已加载 v1.0.0（XHR + fetch 劫持已就绪）');
+    log('已加载 v1.0.1（XHR + fetch 劫持已就绪）');
 })();
