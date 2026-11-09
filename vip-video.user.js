@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         🫧404小站 — 🎬VIP追剧神器 | 完全免费 | 支持多平台 | (电脑/手机/平板...自适应)
 // @namespace    https://scriptcat.org/zh-CN/users/162063
-// @version      3.6.0
+// @version      3.6.1
 // @description  ▶在线VIP视频解析工具 (电脑/手机/平板...自适应) | free | 支持多平台【爱奇艺】【腾讯视频】【优酷土豆】【芒果TV】【乐视视频】【哔哩哔哩】【搜狐视频】等常见平台。✨9条解析接口实测可用 ✨内嵌播放无广告 ✨智能切集追剧 ✨内嵌铺满原播放区 ✨一键自动解析  制作不易，有问题可加微信咨询：Why15236444193 [如果加微信未能及时回复，请多多包涵哈！]
 // @author       yyy404
 // @match        *://*/*
@@ -67,7 +67,7 @@
     }
 
     // ===== 66dpw 跳板页接管 =====
-    // https://www.66dpw.vip/?url=<视频页> 不是解析接口，单独打开是没用的：
+    // https://www.77dpw.vip/?url=<视频页> 不是解析接口，单独打开是没用的：
     //   · 服务端忽略 ?url=（带 / 不带 / 编码过的 ?url= 返回完全相同的首页 HTML）
     //   · 首页自身没有播放能力（HTML 与 12 个外部 JS 里没有任何播放器库的痕迹）
     // 它的唯一用途是当「授权宿主页」：真播放接口只有当「自己嵌在这个已授权域名下」才放行，
@@ -87,7 +87,7 @@
     //        不给她方权限，起播和全屏都会被挡。
     // ⚠️ 不能在这里调 window.stop()：它会连「新的 frame」一起停掉，
     //    会导致新建的 iframe 永远不出画面（表现：整页纯黑，连它自己的 loading 图都看不到）。
-    const GATE_HOST = 'www.66dpw.vip';
+    const GATE_HOST = 'www.77dpw.vip';   // 3.6.1：66dpw.vip 是旧域名，77dpw.vip 是站点公告的永久域名
     const GATE_PLAY_API = 'https://svip.qlplayer.cyou/?url=';
     // 宿主页的窗口名。
     // ⚠️ 必须是【具名窗口】，不能再用 '_blank'：
@@ -211,11 +211,7 @@
         eco: '#ffa64d',       // ⑤ 橙  —— EcoHub 一家
         ikanbot: '#9db8d1',   // ⑥ 钢蓝灰 —— 爱看机器人（名字带「机器人」，配金属冷色；也是唯一低饱和色，最好认）
         lxyy: '#ff8fb0',      // ⑦ 粉  —— 洛雪TV
-        yparse: '#7ee787',    // ⑨ 亮绿 —— 云解析（yparse.ik9.cc）
-        pangu: '#ffd166',     // ⑩ 金黄 —— 盘古解析（pangujiexi.com）
-        pm: '#a5d6ff',        // ⑪ 浅蓝 —— PM / m3u8.tv（playm3u8.cn 一家）
-        jiasu: '#ffb86b',     // ⑫ 橙黄 —— 加速7 / 45网（dashu 发过的裸IP接口）
-        special: '#ff6b4a'    // ⑬ 朱红 —— 邦宁 / bd解析 / 154网（无明确归属）
+        wmxz: '#6ec1e4'       // ⑨ 青蓝 —— 无名小站（jx.pianku.online / jx.wmxz.online，解析 + 搜索跳转 + 采集 + 导航四处同色）
     };
 
     const parseApis = [
@@ -225,41 +221,40 @@
         {"name": "TXNQ", "type": "1,3", "url": "https://bfq.txnp.cn/player?url=", "mark": "txnp"},
         {"name": "酥皮", "type": "1,3", "url": "https://art.txnp.cn/?url=", "mark": "txnp"},
         {"name": "TXNQ2", "type": "1,3", "url": "https://bfq.txnp.cn/excessive?url=", "mark": "txnp"},
-        {"name": "云解析", "type": "1,3", "url": "https://yparse.ik9.cc/index.php?url=", "mark": "yparse"},
-        {"name": "bd解析", "type": "1,3", "url": "https://bd.jx.cn/?url=", "mark": "special"},
+        {"name": "云解析", "type": "1,2,3", "url": "https://yparse.ik9.cc/index.php?url="},
         // 臻享 / 789：两家独立解析，都支持内嵌 + 弹窗，暂无专属颜色
-        {"name": "臻享", "type": "1,3", "url": "https://aibox.eu.org/?url="},
-        {"name": "789", "type": "1,3", "url": "https://jiexi.789jiexi.com/?url="},
-        // ===== 66大片网 / 麒麟 这一家的三个解析入口（同色 = 同一家）=====
-        // 命名：66网1/2 = 走 66大片网 的两个入口；麒麟1 = 麒麟自己的接口域名。
-        // 66网1：站内跳转入口（= 授权宿主页）。需要"剥 query + 不编码"的形态，所以打 clean 标记
-        {"name": "66网1", "type": "3", "url": "https://www.66dpw.vip/?url=", "mark": "qilin", "clean": true, "windowOpen": true},
-        // 66网2：独立解析页（内部再嵌真正的接口）。内嵌会被域名授权挡住
-        {"name": "66网2", "type": "3", "url": "https://www.66dpw.vip/88888888/jiexi.html?url=", "mark": "qilin"},
+        {"name": "臻享", "type": "1,2,3", "url": "https://aibox.eu.org/?url="},
+        // 无名小站（3.6.1 新增）：带选集，支持内嵌/弹窗/带选集全部类型
+        // 原始地址 jx.pianku.online 会 302 到 jx.wmxz.online，两个都能用
+        {"name": "无名小站", "type": "1,2,3", "url": "https://jx.pianku.online/?url=", "mark": "wmxz"},
         // 麒麟1：麒麟的另一个接口域名。实测 title 是「麒麟视频播放器」。
         // ⚠️ type 用 "1,3" 是故意的：66网2 内嵌被域名授权挡所以只敢写 "3"；这条静态检查没发现拦截，
         //    但静态查不出运行时的域名授权 ⇒ 写 "1,3" 让界面上能【一键切内嵌/弹窗】自己试。
-        {"name": "麒麟1", "type": "1,3", "url": "https://free.maccms.xyz/?url=", "mark": "qilin"},
+        {"name": "麒麟1", "type": "1,3", "url": "https://free.maccms.xyz/?url="},
+        {"name": "789", "type": "1,3", "url": "https://jiexi.789jiexi.com/?url="},
+        // 邦宁：解析结果特殊，所以单独一个颜色。放在最后 —— 原来紧跟 66网那组（蓝绿）之后、
+        // 那时 66网还是纯绿，红绿相邻对红绿色弱不友好；现在绿已换蓝绿，而且它排在家族顺序的末位。
+        {"name": "邦宁", "type": "1,3", "url": "https://video.isyour.love/player/getplayer?url="},
+        // ===== 以下 10 条没有颜色（不属于上面任何一家）=====
+        {"name": "M1907", "type": "1,2,3", "url": "https://im1907.top/?jx="},
+        // ---------- 第三组：响应不稳定，保留备用 ----------     
+        {"name": "盘古", "type": "1,3", "url": "https://www.pangujiexi.com/jiexi/?url="},
+        {"name": "PM", "type": "1,3", "url": "https://www.playm3u8.cn/jiexi.php?url="},
+        {"name": "m3u8tv", "type": "1,3", "url": "https://jx.m3u8.tv/jiexi/?url="},
+        {"name": "bd解析", "type": "1,3", "url": "https://bd.jx.cn/?url="},
+        {"name": "加速7", "type": "1,3", "url": "https://v.jiasu7.top/jx.php?url="},
+        // ---------- 第四组：播放异常，保留备用 ----------
+        {"name": "45网", "type": "1,3", "url": "http://45.207.198.92:8899/?url="},
+        {"name": "154网", "type": "1,3", "url": "http://154.13.4.144:8001/excessive?url="},
+        // ===== 66大片网 的两个入口（只支持弹窗，所以排在后面）=====
+        // 66网1：站内跳转入口（= 授权宿主页）。需要"剥 query + 不编码"的形态，所以打 clean 标记
+        {"name": "66网1", "type": "3", "url": "https://www.77dpw.vip/?url=", "mark": "qilin", "clean": true, "windowOpen": true},
+        // 66网2：独立解析页（内部再嵌真正的接口 svip.qlplayer.cyou）。内嵌会被域名授权挡住
+        {"name": "66网2", "type": "3", "url": "https://www.77dpw.vip/88888888/jiexi.html?url=", "mark": "qilin"},
         // LX解析：lxyy 家族（和导航页「洛雪TV」同域同色）。
         // ⚠️ 只给 "3"（弹窗）：直接打开或内嵌都会报「您的域名未授权播放」——
         //    实测入口本身 200，被挡的是它内部播放器的二次请求；必须让它自己的页面打开才正常。
         {"name": "LX解析", "type": "3", "url": "https://jx.lxyy.club/index.php?url=", "mark": "lxyy", "windowOpen": true},
-        // 邦宁：解析结果特殊，所以单独一个颜色。放在最后 —— 原来紧跟 66网那组（蓝绿）之后、
-        // 那时 66网还是纯绿，红绿相邻对红绿色弱不友好；现在绿已换蓝绿，而且它排在家族顺序的末位。
-        {"name": "邦宁", "type": "1,3", "url": "https://video.isyour.love/player/getplayer?url=", "mark": "special"},
-        // ===== 以下 3 条没有颜色（不属于上面任何一家）=====
-        {"name": "七哥", "type": "1,3", "url": "https://jx.202617.xyz/tv.php?url="},
-        {"name": "M1907", "type": "1,2,3", "url": "https://im1907.top/?jx="},
-        // ---------- 第三组：响应不稳定，保留备用 ----------     
-        {"name": "盘古", "type": "1,3", "url": "https://www.pangujiexi.com/jiexi/?url=", "mark": "pangu"},
-        {"name": "PM", "type": "1,3", "url": "https://www.playm3u8.cn/jiexi.php?url=", "mark": "pm"},
-        {"name": "m3u8tv", "type": "1,3", "url": "https://jx.m3u8.tv/jiexi/?url=", "mark": "pm"},
-        {"name": "加速7", "type": "1,3", "url": "https://v.jiasu7.top/jx.php?url=", "mark": "jiasu"},
-        // ---------- 第四组：播放异常，保留备用 ----------
-        {"name": "45网", "type": "1,3", "url": "http://45.207.198.92:8899/?url=", "mark": "jiasu"},
-        {"name": "154网", "type": "1,3", "url": "http://154.13.4.144:8001/excessive?url=", "mark": "special"},
-        // ---------- 末组：连接异常，保留备用 ----------
-        {"name": "Node", "type": "1,3", "url": "https://jx.nodenode.dpdns.org/?url="},
     ];
 
     const uniqueApis = [];
@@ -510,14 +505,14 @@
         donateTab: null,
         simpleApiList: null,
         complexApiList: null,
-        addApiForm: null,
+        customApiEditor: null,
         styleSetPanel: null,
         shortcutSetPanel: null,
         autoParseSetPanel: null,
         noticePanel: null,
-        apiNameInput: null,
-        apiUrlInput: null,
-        apiTypeSelect: null,
+        // apiNameInput: null,   （3.6.1 已废弃，改用文本域）
+        // apiUrlInput: null,   （3.6.1 已废弃，改用文本域）
+        // apiTypeSelect: null,   （3.6.1 已废弃，改用文本域）
         // ===== 采集源 / 导航 标签页 =====
         collectTab: null,
         navTab: null,
@@ -755,7 +750,7 @@
             padding-top: 10px;
             border-top: 1px solid #555;
         }
-        #${CONFIG.vipBoxId} #add_api_btn, #${CONFIG.vipBoxId} #manage_api_btn, #${CONFIG.vipBoxId} #open-style-set-btn, #${CONFIG.vipBoxId} #open-shortcut-set-btn, #${CONFIG.vipBoxId} #open-auto-parse-set-btn {
+        #${CONFIG.vipBoxId} #manage_api_btn, #${CONFIG.vipBoxId} #open-style-set-btn, #${CONFIG.vipBoxId} #open-shortcut-set-btn, #${CONFIG.vipBoxId} #open-auto-parse-set-btn {
             background-color: #36383f;
             color: #ccc;
             border: 1px solid #5a5a5a;
@@ -767,7 +762,7 @@
             cursor: pointer;
             margin-left: 5px;
         }
-        #${CONFIG.vipBoxId} #add_api_btn:hover, #${CONFIG.vipBoxId} #manage_api_btn:hover, #${CONFIG.vipBoxId} #open-style-set-btn:hover, #${CONFIG.vipBoxId} #open-shortcut-set-btn:hover, #${CONFIG.vipBoxId} #open-auto-parse-set-btn:hover {
+        #${CONFIG.vipBoxId} #manage_api_btn:hover, #${CONFIG.vipBoxId} #open-style-set-btn:hover, #${CONFIG.vipBoxId} #open-shortcut-set-btn:hover, #${CONFIG.vipBoxId} #open-auto-parse-set-btn:hover {
             background-color: #42444a;
         }
         /* 「 | 内嵌 / 弹窗」里那个字。【只有一个类 .mode】—— 能不能点不由类名区分，
@@ -859,12 +854,10 @@
            输入框(input/select)和主按钮的外观在 4 个标签页里反复出现、属性值一模一样，
            这里集中写一份；下面各规则只留自己特有的（padding / font-size / width 等）。
            ⚠️ 顺序要求：这条必须在各具体规则【之前】—— 选择器同优先级时，靠后的才盖得住。
-           ⚠️ .add-api-form .cancel-btn 改的是背景色，它选择器更具体，不受这条影响。 */
+            */
         #${CONFIG.vipBoxId} .collect-player-bar select,
         #${CONFIG.vipBoxId} .collect-search input,
         #${CONFIG.vipBoxId} .collect-url-row input,
-        #${CONFIG.vipBoxId} .add-api-form input,
-        #${CONFIG.vipBoxId} .add-api-form select,
         #vip-style-set-panel input,
         #vip-shortcut-set-panel input,
         #vip-auto-parse-set-panel select {
@@ -875,8 +868,7 @@
         }
         #${CONFIG.vipBoxId} .collect-player-bar button,
         #${CONFIG.vipBoxId} .collect-search button,
-        #${CONFIG.vipBoxId} .collect-url-row button,
-        #${CONFIG.vipBoxId} .add-api-form button {
+        #${CONFIG.vipBoxId} .collect-url-row button {
             border: none;
             border-radius: 3px;
             background-color: #1c84c6;
@@ -1170,83 +1162,108 @@
             margin-top: 2px;
             word-break: break-all;
         }
-        #${CONFIG.vipBoxId} .add-api-form {
-            padding: 10px;
-            border-radius: 4px;
-            margin: 10px;
-            display: none;
-        }
-        #${CONFIG.vipBoxId} .add-api-form input,
-        #${CONFIG.vipBoxId} .add-api-form select,
-        #vip-style-set-panel input,
-        #vip-shortcut-set-panel input,
-        #vip-auto-parse-set-panel select {
-            width: 100%;
-            padding: 6px;
-            margin: 5px 0;
-        }
-        #${CONFIG.vipBoxId} .add-api-form button {
-            padding: 8px 12px;
-            margin: 5px 2px;
-            font-size: 12px;
-        }
-        #${CONFIG.vipBoxId} .add-api-form .cancel-btn {
-            background-color: #72747a;
-        }
-        /* ===== 「管理自定义接口」面板 =====
-           为什么要有它：原来 customApis 只增不减（全文件只有 push，没有删除/编辑入口），
-           加错一个地址就只能去清浏览器数据。这里列出用户加过的每一条 + 一个删除按钮。
-           它不在 .add-api-form 里面，所以拿不到那条共用输入框样式，这里单独写。 */
-        #${CONFIG.vipBoxId} .custom-api-manage {
-            display: none;
-            margin: 10px;
-            padding: 8px 10px;
-            border-radius: 4px;
-            border: 1px solid #5a5a5a;
-            text-align: left;
-        }
-        #${CONFIG.vipBoxId} .custom-api-row {
+                                                                #${CONFIG.vipBoxId}
+
+        /* ===== 3.6.1 设置按钮行（4 个按钮一行）===== */
+        #${CONFIG.vipBoxId} .settings-btn-row {
             display: flex;
-            align-items: center;
-            gap: 8px;
-            padding: 6px 0;
-            border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+            gap: 4px;
+            justify-content: center;
+            flex-wrap: nowrap;
+            margin-bottom: 8px;
         }
-        #${CONFIG.vipBoxId} .custom-api-row:last-child {
-            border-bottom: none;
-        }
-        #${CONFIG.vipBoxId} .custom-api-info {
+        #${CONFIG.vipBoxId} .settings-btn-row button {
             flex: 1 1 auto;
             min-width: 0;
+            padding: 6px 4px;
+            font-size: 11px;
+            white-space: nowrap;
         }
-        #${CONFIG.vipBoxId} .custom-api-name {
-            display: block;
-            font-size: 12px;
+
+        /* ===== 3.6.1 自定义接口编辑器 ===== */
+        #${CONFIG.vipBoxId} .custom-api-editor {
+            display: none;
+            margin: 10px;
+            padding: 10px;
+            /* 3.6.1：去掉圆角，跟其他设置面板一致 */
+            border-top: 1px solid #555;
+            text-align: left;
         }
-        #${CONFIG.vipBoxId} .custom-api-url {
-            display: block;
-            font-size: 10px;
-            opacity: 0.65;
-            word-break: break-all;
+        #${CONFIG.vipBoxId} .custom-api-editor .editor-hint {
+            font-size: 11px;
+            /* 3.6.1：去掉 opacity，跟其他面板文字一致 */
+            line-height: 1.7;
+            margin-bottom: 6px;
         }
-        #${CONFIG.vipBoxId} .custom-api-del {
-            flex: 0 0 auto;
-            padding: 4px 10px;
+        #${CONFIG.vipBoxId} .custom-api-editor .editor-hint b {
+            color: #7ee787;
+        }
+        #${CONFIG.vipBoxId} .custom-api-editor textarea {
+            width: 100%;
+            min-height: 90px;
+            padding: 8px;
+            box-sizing: border-box;
+            background-color: #1e2027;
+            color: #e8eef5;
+            border: 1px solid #555;
+            border-radius: 3px;
+            font-family: Consolas, Monaco, "Courier New", monospace;
+            font-size: 11.5px;
+            line-height: 1.6;
+            resize: vertical;
+            outline: none;
+        }
+        #${CONFIG.vipBoxId} .custom-api-editor textarea:focus {
+            border-color: #58a6ff;
+        }
+        #${CONFIG.vipBoxId} .custom-api-editor textarea::placeholder {
+            color: #6e7681;
+        }
+        #${CONFIG.vipBoxId} .custom-api-editor .editor-status {
+            font-size: 11px;
+            line-height: 1.7;
+            margin: 6px 0;
+            min-height: 18px;
+        }
+        #${CONFIG.vipBoxId} .custom-api-editor .editor-status .ok {
+            color: #3fb950;
+        }
+        #${CONFIG.vipBoxId} .custom-api-editor .editor-status .warn {
+            color: #ffd166;
+        }
+        #${CONFIG.vipBoxId} .custom-api-editor .editor-status .err {
+            color: #f85149;
+        }
+        #${CONFIG.vipBoxId} .custom-api-editor .editor-btns {
+            text-align: center;
+            margin-top: 4px;
+        }
+        #${CONFIG.vipBoxId} .custom-api-editor .editor-btns button {
+            width: 40%;
+            padding: 8px 12px;
+            margin: 5px 1%;
             border: none;
             border-radius: 3px;
-            background-color: #b3352f;
+            background-color: #1c84c6;
             color: #fff;
-            font-size: 11px;
+            font-size: 12px;
             cursor: pointer;
+            display: inline-block;
         }
-        #${CONFIG.vipBoxId} .custom-api-del:hover {
-            background-color: #d13f38;
+        #${CONFIG.vipBoxId} .custom-api-editor .editor-btns button:hover {
+            background-color: #2a9bd8;
         }
-        #${CONFIG.vipBoxId} .custom-api-empty {
-            font-size: 11px;
-            opacity: 0.7;
-            text-align: center;
-            padding: 2px 0;
+        #${CONFIG.vipBoxId} .custom-api-editor .editor-btns button.secondary {
+            background-color: #72747a;
+        }
+        #${CONFIG.vipBoxId} .custom-api-editor .editor-btns button.secondary:hover {
+            background-color: #8a8c92;
+        }
+        #${CONFIG.vipBoxId} .custom-api-editor .editor-btns button.dirty {
+            background-color: #bf8700;
+        }
+        #${CONFIG.vipBoxId} .custom-api-editor .editor-btns button.dirty:hover {
+            background-color: #d29922;
         }
         /* 自定义接口在解析列表里的记号：中性灰蓝，不占用 7 个家族色 */
         #${CONFIG.vipBoxId} .api-custom-mark {
@@ -1611,7 +1628,9 @@
             items: [
                 // 排列：家族顺序跟导航页 / 解析接口【保持一致】（见 API_MARK_COLOR 的声明顺序），无色的沉底
                 { name: 'txnp搜索', api: 'https://cms.txnp.cn/index.php/vod/search.html?wd={kw}', fmt: 'search', mark: 'txnp' },
-                { name: '66网1片库搜索', api: 'https://www.66dpw.vip/vodsearch/-------------.html?wd={kw}', fmt: 'search', mark: 'qilin' },
+                { name: '66网1片库搜索', api: 'https://www.77dpw.vip/vodsearch/-------------.html?wd={kw}', fmt: 'search', mark: 'qilin' },
+    // 无名小站（3.6.1 新增）：直接用剧名搜，跳转到它自己的站内搜索
+    { name: '无名小站搜索', api: 'https://jx.pianku.online/?url={kw}', fmt: 'search', mark: 'wmxz' },
                 { name: '无损云搜索', api: 'http://wsyzy.cc/index.php/vod/search.html?wd={kw}&submit=search', fmt: 'search', mark: 'wsyzy' },
                 { name: 'EcoHub站', api: 'https://eco.fe-spark.cn/search?search={kw}', fmt: 'search', mark: 'eco' },
                 { name: '爱看机器人（主）', api: 'https://www.ikanbot.com/search?q={kw}', fmt: 'search', mark: 'ikanbot' },
@@ -1652,7 +1671,9 @@
         //   ③ 带颜色的排在前面（它们是"有来头"的站），不带颜色的沉底。
         { name: 'ZIP0', url: 'https://zip0.com/?r=0LUAMJ', mark: 'zip0', desc: '在线影视聚合搜索，一次查询多个公开来源 · 覆盖电影 / 短剧 / 电视剧 / 综艺 / 纪录片 / 体育 · 另有看电视 / 听广播 / 音乐 / 小游戏 · (❤️ ω ❤️) 作者力推，非常推荐 · ┏ (゜ω゜)=👉 邀请链接' },
         { name: 'cms.txnp.cn', url: 'https://cms.txnp.cn/', mark: 'txnp', desc: '免费短视频分享站，影视 / 短视频 / 动漫 / 综艺 / 学习 / 音乐等分类，自带搜索' },
-        { name: '66大片网', url: 'https://www.66dpw.vip/', mark: 'qilin', desc: '电影 / 动漫 / 短剧 / 综艺等，各分类上万部，每日更新，手机端流畅播放' },
+        { name: '66大片网', url: 'https://www.77dpw.vip/', mark: 'qilin', desc: '电影 / 动漫 / 短剧 / 综艺等，各分类上万部，每日更新，手机端流畅播放' },
+    // 无名小站（3.6.1 新增）：解析站，也做影视站用
+    { name: '无名小站', url: 'https://jx.pianku.online/', mark: 'wmxz', desc: '影视站 + 解析站，自带搜索，可解析片名 / 官方网址 / M3U8，自动去广告' },
         { name: '无水印资源网', url: 'http://wsyzy.cc/', mark: 'wsyzy', desc: '电影 / 电视剧 / 美剧 / 韩剧 / 综艺 / 动漫 / 短剧 / 纪录片，站内标称 12.5 万条，自带搜索（首次需验证码）· ⚠️ 它自带的播放器会做 P2P 上传、占用上行带宽' },
         { name: 'EcoHub 演示站', url: 'https://eco.fe-spark.cn/', mark: 'eco', desc: '开源多播放源聚合站（电视剧 / 电影 / 动漫 / 综艺 / 体育），站点自述「自动采集、多播放源集成」' },
         { name: '爱看机器人', url: 'https://www.ikanbot.com/', mark: 'ikanbot', desc: '全网影视资源搜索引擎（爬虫检索免费在线影视），自带搜索' },
@@ -2614,7 +2635,7 @@
     }
 
     function buildApiListsHtml() {
-        let simpleApisHtml = "<div class='section-title'>[内嵌播放+弹窗无选集]</div><ul class='simple-api-list'>";
+        let simpleApisHtml = "<div class='section-title'>[内嵌+弹窗 播放]</div><ul class='simple-api-list'>";
         let complexApisHtml = "<div class='section-title'>[弹窗带选集]</div><ul class='complex-api-list'>";
 
         allApis.forEach((item, index) => {
@@ -2693,25 +2714,274 @@
 
     // 列出自己添加的解析接口，每条一个「删除」。
     // customApis 若只增不减，加错了就只能去清浏览器数据。
-    function renderCustomApiManage() {
-        const box = DOM_CACHE.customApiManage;
-        if (!box) return;
-        if (!customApis.length) {
-            box.innerHTML = '<div class="custom-api-empty">还没有添加过自定义接口</div>';
-            return;
+        // 类型别名 → 内部值（省略时默认两用）
+    const CUSTOM_API_TYPE_MAP = {
+        '内嵌': '1', '1': '1',
+        '弹窗': '3', '3': '3',
+        '弹窗选集': '2', '2': '2',
+        '两用': '1,3', '1,3': '1,3',
+        '全部': '1,2,3', '1,2,3': '1,2,3',
+    };
+    const CUSTOM_API_TYPE_DEFAULT = '1,3';   // 省略类型时的默认值：内嵌+弹窗
+
+    // 从 URL 提取一个可读的名字（域名主干）
+    function guessNameFromUrl(url) {
+        try {
+            const u = new URL(url);
+            let host = u.hostname.replace(/^www\./, '');
+            // 取主域名的第一段（bfq.txnp.cn → bfq；free.maccms.xyz → free）
+            const seg = host.split('.')[0];
+            return seg || host;
+        } catch (e) {
+            // 不是合法 URL，就从字符串里抠一段
+            const m = String(url).match(/^https?:\/\/([^\/]+)/i);
+            if (m) return m[1].replace(/^www\./, '').split('.')[0];
+            return '';
         }
-        let html = '';
-        customApis.forEach((api, i) => {
-            html += '<div class="custom-api-row">'
-                + '<span class="custom-api-info">'
-                + '<b class="custom-api-name">＋' + escapeAttr(api.name) + '</b>'
-                + '<span class="custom-api-url">' + escapeAttr(api.url)
-                + ' · ' + escapeAttr(API_TYPE_LABEL[api.type] || api.type) + '</span>'
-                + '</span>'
-                + '<button class="custom-api-del" data-ci="' + i + '">删除</button>'
-                + '</div>';
+    }
+
+    // 解析一行文本 → { name, url, type } 或 { error }
+    // 规则：按逗号切分（中英文都支持），找出 http(s):// 开头的那一段作为地址
+    function parseCustomApiLine(raw) {
+        const line = String(raw || '').trim();
+        if (!line) return null;   // 空行
+
+        // ===== 用 URL 当锚点，分隔符随意（空格 / 逗号 / 竖线 / Tab / 不写）=====
+        // URL 不含空格，先整体抓出来；再处理「URL 尾部粘连了类型」的情况
+        const urlMatch = line.match(/https?:\/\/[^\s]+/i);
+
+        let name = '';
+        let url = '';
+        let tail = '';
+
+        if (urlMatch) {
+            url = urlMatch[0];
+            const beforeText = line.slice(0, urlMatch.index);
+            tail = line.slice(urlMatch.index + url.length);
+            name = beforeText.replace(/^[\s,，|、;；\t]+|[\s,，|、;；\t]+$/g, '').trim();
+
+            // ⚠️ 无空格分隔时，类型会粘在 URL 尾部：https://a/?url=,内嵌
+            //    这里把「分隔符 + 类型标记」从 URL 末尾剥出来
+            const SEP = '[,，|、;；]';
+            const zhTypes = ['弹窗选集', '内嵌', '弹窗', '两用', '全部'];
+            for (let i = 0; i < zhTypes.length; i++) {
+                const t = zhTypes[i];
+                const re = new RegExp(SEP + t + '$');
+                if (re.test(url)) {
+                    tail = t + tail;
+                    url = url.replace(re, '');
+                    break;
+                }
+            }
+            // 数字类型（1 / 2 / 3 / 1,3 / 1,2,3）
+            if (!tail) {
+                const m = url.match(new RegExp(SEP + '((?:\\d+,)*\\d+)$'));
+                if (m && /^(1|2|3|1,3|1,2,3)$/.test(m[1])) {
+                    tail = m[1];
+                    url = url.slice(0, m.index);
+                }
+            }
+        } else {
+            // 没找到 http(s):// —— 按分隔符切
+            const parts = line.split(/[\s,，|、;；\t]+/).filter(Boolean);
+            if (!parts.length) return { error: '内容为空' };
+            if (parts.length === 1) {
+                url = parts[0];
+            } else {
+                const last = parts[parts.length - 1];
+                const typeAliases = ['内嵌', '弹窗', '弹窗选集', '两用', '全部', '1', '2', '3', '1,3', '1,2,3'];
+                if (typeAliases.indexOf(last) >= 0) {
+                    tail = last;
+                    parts.pop();
+                }
+                url = parts[parts.length - 1];
+                name = parts.slice(0, -1).join(' ');
+            }
+        }
+
+        if (!url) return { error: '缺少地址' };
+
+        if (!name) name = guessNameFromUrl(url);
+        if (!name) return { error: '缺少名称且无法从地址推断' };
+
+        // ===== 从 tail 抠类型 =====
+        let type = CUSTOM_API_TYPE_DEFAULT;
+        let typeRaw = '';
+
+        const zhTypes2 = ['弹窗选集', '内嵌', '弹窗', '两用', '全部'];
+        for (let i = 0; i < zhTypes2.length; i++) {
+            const t = zhTypes2[i];
+            const re = new RegExp('(?:^|[\\s,，|、;；\\t])' + t + '(?:$|[\\s,，|、;；\\t])');
+            if (re.test(tail)) { typeRaw = t; break; }
+        }
+
+        if (!typeRaw) {
+            const cleaned = tail.replace(/^[\s,，|、;；\t]+|[\s,，|、;；\t]+$/g, '').trim();
+            if (/^(1|2|3|1,3|1,2,3)$/.test(cleaned)) typeRaw = cleaned;
+        }
+
+        if (typeRaw) {
+            const mapped = CUSTOM_API_TYPE_MAP[typeRaw];
+            if (mapped) type = mapped;
+        }
+
+        return { name: name, url: url, type: type };
+    }
+
+    // 解析整段文本 → { items, errors }
+    function parseCustomApiText(text) {
+        const lines = String(text || '').split(/\r?\n/);
+        const items = [];
+        const errors = [];
+        const seenUrls = new Set();
+        lines.forEach((raw, i) => {
+            const r = parseCustomApiLine(raw);
+            if (!r) return;   // 空行
+            if (r.error) { errors.push({ line: i + 1, msg: r.error, raw: raw.trim() }); return; }
+            if (seenUrls.has(r.url)) { errors.push({ line: i + 1, msg: '地址重复，已跳过', raw: raw.trim() }); return; }
+            seenUrls.add(r.url);
+            items.push(r);
         });
-        box.innerHTML = html;
+        return { items: items, errors: errors };
+    }
+
+    // 把 customApis 数组序列化成文本（用于回填文本框）
+    function serializeCustomApis() {
+        const TYPE_LABEL_REV = { '1': '内嵌', '2': '弹窗选集', '3': '弹窗', '1,3': '两用', '1,2,3': '全部' };
+        return customApis.map((a) => {
+            const t = TYPE_LABEL_REV[a.type];
+            // 两用是默认值，省略不写（保持文本简洁）
+            return t && t !== '两用' ? (a.name + ',' + a.url + ',' + t) : (a.name + ',' + a.url);
+        }).join('\n');
+    }
+
+    // 渲染编辑器：回填文本 + 绑定事件
+    function renderCustomApiManage() {
+        const box = DOM_CACHE.customApiEditor;
+        if (!box) return;
+        const ta = box.querySelector('#custom-api-textarea');
+        const status = box.querySelector('#custom-api-status');
+        const saveBtn = box.querySelector('#custom-api-save');
+        const copyBtn = box.querySelector('#custom-api-copy');
+        if (!ta) return;
+
+        // 回填（除非正在编辑中）
+        if (!ta.dataset.dirty) {
+            ta.value = serializeCustomApis();
+        }
+
+        // 实时校验
+        let timer = null;
+        function validate() {
+            const r = parseCustomApiText(ta.value);
+            const count = r.items.length;
+            const errCount = r.errors.length;
+            let html = '';
+            if (count === 0 && errCount === 0) {
+                html = '<span style="opacity:.6">（空）</span>';
+            } else {
+                // 类型统计
+                const stat = {};
+                r.items.forEach((it) => {
+                    const lb = { '1': '内嵌', '2': '弹窗选集', '3': '弹窗', '1,3': '两用', '1,2,3': '全部' }[it.type] || it.type;
+                    stat[lb] = (stat[lb] || 0) + 1;
+                });
+                const statStr = Object.keys(stat).map((k) => k + ' ' + stat[k]).join(' · ');
+                html += '<span class="ok">✓ 已识别 ' + count + ' 条</span>';
+                if (statStr) html += ' <span style="opacity:.7">｜ ' + statStr + '</span>';
+            }
+            if (errCount > 0) {
+                html += '<br><span class="warn">⚠ ' + errCount + ' 行有问题：</span>';
+                r.errors.slice(0, 5).forEach((e) => {
+                    html += '<br><span class="warn">　第 ' + e.line + ' 行 ' + escapeAttr(e.msg) + '</span>';
+                });
+                if (r.errors.length > 5) html += '<br><span class="warn">　…还有 ' + (r.errors.length - 5) + ' 行</span>';
+            }
+            if (status) status.innerHTML = html;
+
+            // 保存按钮：有未保存改动就变橙
+            const dirty = ta.dataset.dirty === '1';
+            if (saveBtn) {
+                saveBtn.textContent = dirty ? '保存（未保存）' : '保存';
+                saveBtn.classList.toggle('dirty', dirty);
+            }
+            return r;
+        }
+
+        // 输入时防抖校验 + 标记 dirty
+        if (!ta.dataset.bound) {
+            ta.dataset.bound = '1';
+            ta.addEventListener('input', () => {
+                ta.dataset.dirty = '1';
+                if (timer) clearTimeout(timer);
+                timer = setTimeout(validate, 250);
+            });
+        }
+
+        // 保存
+        if (saveBtn && !saveBtn.dataset.bound) {
+            saveBtn.dataset.bound = '1';
+            saveBtn.addEventListener('click', (e) => {
+                e.stopPropagation();
+                const r = parseCustomApiText(ta.value);
+                if (!r.items.length && r.errors.length) {
+                    alert('没有可保存的有效接口\n\n' + r.errors.slice(0, 10).map((x) => '第 ' + x.line + ' 行：' + x.msg).join('\n'));
+                    return;
+                }
+                const oldCount = customApis.length;
+                customApis = r.items.slice();
+                GM_setValue("custom_parse_apis", customApis);
+                allApis = [...uniqueApis, ...customApis];
+                renderApiLists();
+                ta.dataset.dirty = '';
+                ta.value = serializeCustomApis();
+                validate();
+                const diff = customApis.length - oldCount;
+                const diffStr = diff === 0 ? '（数量未变）' : (diff > 0 ? '（+' + diff + '）' : '（' + diff + '）');
+                try {
+                    vipToast('已保存', customApis.length + ' 个接口' + diffStr + (r.errors.length ? '，忽略 ' + r.errors.length + ' 行' : ''), { icon: 'info', ms: 2200 });
+                } catch (err) {}
+            });
+        }
+
+        // 复制全部
+        if (copyBtn && !copyBtn.dataset.bound) {
+            copyBtn.dataset.bound = '1';
+            copyBtn.addEventListener('click', (e) => {
+                e.stopPropagation();
+                copyToClipboard(ta.value).then((ok) => {
+                    if (ok) {
+                        try { vipToast('已复制', '当前文本已复制到剪贴板', { icon: 'info', ms: 1800 }); } catch (err) {}
+                    } else {
+                        ta.select();
+                        document.execCommand('copy');
+                        try { vipToast('已复制', '', { icon: 'info', ms: 1500 }); } catch (err) {}
+                    }
+                });
+            });
+        }
+
+        validate();
+    }
+
+    // 复制到剪贴板（返回 Promise<boolean>）
+    function copyToClipboard(text) {
+        return new Promise((resolve) => {
+            if (navigator.clipboard && navigator.clipboard.writeText) {
+                navigator.clipboard.writeText(text).then(() => resolve(true)).catch(() => resolve(false));
+                return;
+            }
+            try {
+                const ta = document.createElement('textarea');
+                ta.value = text;
+                ta.style.cssText = 'position:fixed;left:-9999px;';
+                document.body.appendChild(ta);
+                ta.select();
+                const ok = document.execCommand('copy');
+                document.body.removeChild(ta);
+                resolve(ok);
+            } catch (e) { resolve(false); }
+        });
     }
 
     function applyPanelStyle(style = null) {
@@ -2756,7 +3026,7 @@
             el.style.color = fontColor;
         });
 
-        DOM_CACHE.vipList.querySelectorAll('.add-api-form, .custom-api-manage').forEach(el => {
+        DOM_CACHE.vipList.querySelectorAll('.custom-api-editor').forEach(el => {
             el.style.backgroundColor = bgColor;
         });
 
@@ -3011,25 +3281,23 @@
         const { simpleApisHtml, complexApisHtml } = buildApiListsHtml();
         let customSettingsHtml = `
             <div style="padding: 10px; text-align: center;">
-                <button id="add_api_btn">添加自定义接口</button>
-                <button id="manage_api_btn">管理自定义接口</button>
-                <button id="open-style-set-btn">面板样式设置</button>
-                <button id="open-shortcut-set-btn">自定义快捷键</button>
-                <button id="open-auto-parse-set-btn">自动解析设置</button>
-                <div class="add-api-form" id="add-api-form">
-                    <input type="text" id="api-name" placeholder="接口名称">
-                    <input type="text" id="api-url" placeholder="接口地址（例：https://jx.example.com/?url=；参数名也可能不是 url，比如 ?jx=）">
-                    <select id="api-type">
-                        <option value="1">内嵌播放</option>
-                        <option value="2">弹窗播放带选集</option>
-                        <option value="3">弹窗播放不带选集</option>
-                        <option value="1,3">内嵌 + 弹窗（两种都能用，可切换）</option>
-                        <option value="1,2,3">内嵌 + 弹窗 + 带选集（全都支持）</option>
-                    </select>
-                    <button id="save-api-btn">添加</button>
-                    <button class="cancel-btn" id="cancel-api-btn">取消</button>
+                <div class="settings-btn-row">
+                    <button id="manage_api_btn">自定义接口</button>
+                    <button id="open-style-set-btn">面板样式</button>
+                    <button id="open-shortcut-set-btn">快捷键</button>
+                    <button id="open-auto-parse-set-btn">自动解析</button>
                 </div>
-                <div class="custom-api-manage" id="custom-api-manage"></div>
+                <div class="custom-api-editor" id="custom-api-editor">
+                    <div class="editor-hint">每行一个：<b>名称 地址 类型</b>（分隔符随意，名称/类型<b>可省略</b>）<br><b>默认</b>: 名称=域名,类型=两用｜<b>类型</b>: 内嵌/弹窗/弹窗选集/两用/全部</div>
+                    <textarea id="custom-api-textarea" spellcheck="false" placeholder="TXNQ备用 https://bfq.txnp.cn/player?url=
+麒麟备用 https://free.maccms.xyz/?url= 内嵌
+https://zzz/?jx= 弹窗"></textarea>
+                    <div class="editor-status" id="custom-api-status"></div>
+                    <div class="editor-btns">
+                        <button id="custom-api-save">保存</button>
+                        <button id="custom-api-copy" class="secondary">复制全部</button>
+                    </div>
+                </div>
             </div>
         `;
         const isAutoEnabled = !!GM_getValue(CONFIG.autoPlayerKey, null);
@@ -3146,11 +3414,7 @@
         DOM_CACHE.vipList = vipBox.querySelector('.vip_list');
         DOM_CACHE.vipTab = vipBox.querySelector('#vip-tab');
         DOM_CACHE.donateTab = vipBox.querySelector('#donate-tab');
-        DOM_CACHE.addApiForm = vipBox.querySelector('#add-api-form');
-        DOM_CACHE.apiNameInput = vipBox.querySelector('#api-name');
-        DOM_CACHE.apiUrlInput = vipBox.querySelector('#api-url');
-        DOM_CACHE.apiTypeSelect = vipBox.querySelector('#api-type');
-        DOM_CACHE.customApiManage = vipBox.querySelector('#custom-api-manage');
+        DOM_CACHE.customApiEditor = vipBox.querySelector('#custom-api-editor');
         DOM_CACHE.simpleApiList = vipBox.querySelector('.simple-api-list');
         DOM_CACHE.complexApiList = vipBox.querySelector('.complex-api-list');
         DOM_CACHE.noticePanel = vipBox.querySelector('#vip_notice_panel');
@@ -3438,7 +3702,7 @@
             const isVisible = stylePanel.style.display === 'block';
 
             // 隐藏所有设置面板
-            DOM_CACHE.addApiForm.style.display = 'none';
+            // （3.6.1：addApiForm 已移除）
             DOM_CACHE.styleSetPanel.style.display = 'none';
             DOM_CACHE.shortcutSetPanel.style.display = 'none';
             DOM_CACHE.autoParseSetPanel.style.display = 'none';
@@ -3452,7 +3716,7 @@
             const isVisible = shortcutPanel.style.display === 'block';
 
             // 隐藏所有设置面板
-            DOM_CACHE.addApiForm.style.display = 'none';
+            // （3.6.1：addApiForm 已移除）
             DOM_CACHE.styleSetPanel.style.display = 'none';
             DOM_CACHE.shortcutSetPanel.style.display = 'none';
             DOM_CACHE.autoParseSetPanel.style.display = 'none';
@@ -3467,7 +3731,7 @@
             const isVisible = autoParsePanel.style.display === 'block';
 
             // 隐藏所有设置面板
-            DOM_CACHE.addApiForm.style.display = 'none';
+            // （3.6.1：addApiForm 已移除）
             DOM_CACHE.styleSetPanel.style.display = 'none';
             DOM_CACHE.shortcutSetPanel.style.display = 'none';
             DOM_CACHE.autoParseSetPanel.style.display = 'none';
@@ -3526,88 +3790,26 @@
     // ⑦ 自定义解析接口（添加 / 保存 / 取消）
     function bindCustomApiEvents(ctx) {
         const { vipBox } = ctx;
-        const addApiBtn = vipBox.querySelector("#add_api_btn");
-        if (addApiBtn) {
-            addApiBtn.addEventListener("click", function(e) {
-                e.stopPropagation();
-                const isVisible = DOM_CACHE.addApiForm.style.display === "block";
-
-                // 隐藏所有设置面板
-                DOM_CACHE.addApiForm.style.display = 'none';
-                DOM_CACHE.styleSetPanel.style.display = 'none';
-                DOM_CACHE.shortcutSetPanel.style.display = 'none';
-                DOM_CACHE.autoParseSetPanel.style.display = 'none';
-
-                // 切换当前面板
-                DOM_CACHE.addApiForm.style.display = isVisible ? "none" : "block";
-            });
-        }
-        const saveApiBtn = vipBox.querySelector("#save-api-btn");
-        if (saveApiBtn) {
-            saveApiBtn.addEventListener("click", function(e) {
-                e.stopPropagation();
-                const name = DOM_CACHE.apiNameInput.value.trim();
-                const url = DOM_CACHE.apiUrlInput.value.trim();
-                const type = DOM_CACHE.apiTypeSelect.value;
-                if (!name || !url) {
-                    alert('请填写接口名称和地址');
-                    return;
-                }
-                // ⚠️ 这里【故意不校验地址格式】：参数名各家不一样（?url= / ?jx= / ?v= …），
-                //    强制要求某一种会把合法接口挡在外面。能不能用由使用者自行判断。
-                const newApi = { name, type, url };
-                customApis.push(newApi);
-                allApis = [...uniqueApis, ...customApis];
-                GM_setValue("custom_parse_apis", customApis);
-                DOM_CACHE.apiNameInput.value = '';
-                DOM_CACHE.apiUrlInput.value = '';
-                DOM_CACHE.apiTypeSelect.value = '1';
-                DOM_CACHE.addApiForm.style.display = "none";
-                renderApiLists();
-                renderCustomApiManage();   // 管理面板也要跟着刷新，否则删不掉刚加的那条
-                // 切回「VIP视频解析」标签页，让新接口立即可见（无需刷新）
-                switchTab('vip');
-                vipToast('添加成功', '自定义接口已添加，直接使用无需刷新！', { ms: 2000 });
-            });
-        }
-        const cancelApiBtn = vipBox.querySelector("#cancel-api-btn");
-        if (cancelApiBtn) {
-            cancelApiBtn.addEventListener("click", function(e) {
-                e.stopPropagation();
-                DOM_CACHE.addApiForm.style.display = "none";
-            });
-        }
+        // （3.6.1：单条添加表单已移除）
+        // （3.6.1：单条添加逻辑已移除，改用文本域保存）
+        // （3.6.1：取消按钮已移除）
         // 「管理自定义接口」：和上面几个设置面板一样，互相排斥，点开一个关掉其余
         const manageApiBtn = vipBox.querySelector("#manage_api_btn");
-        if (manageApiBtn && DOM_CACHE.customApiManage) {
+        if (manageApiBtn && DOM_CACHE.customApiEditor) {
             manageApiBtn.addEventListener("click", function(e) {
                 e.stopPropagation();
-                const isVisible = DOM_CACHE.customApiManage.style.display === "block";
-                DOM_CACHE.addApiForm.style.display = 'none';
+                const isVisible = DOM_CACHE.customApiEditor.style.display === "block";
+                // 隐藏其他设置面板
                 DOM_CACHE.styleSetPanel.style.display = 'none';
                 DOM_CACHE.shortcutSetPanel.style.display = 'none';
                 DOM_CACHE.autoParseSetPanel.style.display = 'none';
-                DOM_CACHE.customApiManage.style.display = isVisible ? "none" : "block";
-                if (!isVisible) renderCustomApiManage();   // 每次打开都重画一遍，避免看到过期内容
+                // 切换
+                DOM_CACHE.customApiEditor.style.display = isVisible ? "none" : "block";
+                if (!isVisible) renderCustomApiManage();
             });
         }
         // 删一条自定义接口：改内存 → 存回去 → 重建解析列表 → 重画管理面板
-        if (DOM_CACHE.customApiManage) {
-            DOM_CACHE.customApiManage.addEventListener("click", (e) => {
-                const delBtn = e.target.closest('.custom-api-del');
-                if (!delBtn) return;
-                e.stopPropagation();
-                const ci = parseInt(delBtn.getAttribute('data-ci'), 10);
-                const api = customApis[ci];
-                if (!api) return;
-                if (!confirm('确定删除自定义接口「' + api.name + '」？')) return;
-                customApis.splice(ci, 1);
-                GM_setValue("custom_parse_apis", customApis);
-                allApis = [...uniqueApis, ...customApis];
-                renderApiLists();
-                renderCustomApiManage();
-            });
-        }
+        // （3.6.1：单条删除已移除，改为编辑文本）
     }
 
     // ⑧ 解析接口列表里的点击（切模式 / 内嵌播放 / 弹窗打开）
