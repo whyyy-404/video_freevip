@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         🫧404小站 — 🎬VIP追剧神器 | 完全免费 | 支持多平台 | (电脑/手机/平板...自适应)
 // @namespace    https://scriptcat.org/zh-CN/users/162063
-// @version      3.6.1
+// @version      3.6.2
 // @description  ▶在线VIP视频解析工具 (电脑/手机/平板...自适应) | free | 支持多平台【爱奇艺】【腾讯视频】【优酷土豆】【芒果TV】【乐视视频】【哔哩哔哩】【搜狐视频】等常见平台。✨9条解析接口实测可用 ✨内嵌播放无广告 ✨智能切集追剧 ✨内嵌铺满原播放区 ✨一键自动解析  制作不易，有问题可加微信咨询：Why15236444193 [如果加微信未能及时回复，请多多包涵哈！]
 // @author       yyy404
 // @match        *://*/*
@@ -1025,7 +1025,47 @@
             border-color: #7dd3fc;
         }
         /* 实测不可用的源：虚线边框 + 变暗，但仍可点击复测 */
-        #${CONFIG.vipBoxId} .collect-src-item.bad {
+        /* ===== 3.6.2 一键搜全部 ===== */
+#${CONFIG.vipBoxId} #collect-search-all-btn {
+            background-color: #238636;
+            color: #fff;
+            border: none;
+            border-radius: 3px;
+            padding: 0 12px;
+            margin-left: 6px;
+            font-size: 12px;
+            cursor: pointer;
+            white-space: nowrap;
+            transition: background-color 0.2s;
+        }
+#${CONFIG.vipBoxId} #collect-search-all-btn:hover:not(:disabled) {
+            background-color: #2ea043;
+        }
+#${CONFIG.vipBoxId} #collect-search-all-btn.running {
+            background-color: #1f6feb;
+            cursor: progress;
+        }
+
+/* 3.6.2：搜索后给采集源按钮染色（背景色取自 颜色.txt）*/
+#${CONFIG.vipBoxId} .collect-src-item.search-hit {
+            background: rgba(63, 185, 80, 0.18) !important;
+            /* 文字颜色继承面板默认色，跟未搜索时完全一样 */
+            border-color: rgba(63, 185, 80, 0.55) !important;
+        }
+#${CONFIG.vipBoxId} .collect-src-item.search-hit:hover {
+            background: rgba(63, 185, 80, 0.28) !important;
+            border-color: rgba(63, 185, 80, 0.8) !important;
+        }
+#${CONFIG.vipBoxId} .collect-src-item.search-miss {
+            background: rgba(110, 118, 129, 0.12) !important;
+            color: rgba(200, 200, 200, 0.5) !important;
+            border-color: rgba(110, 118, 129, 0.35) !important;
+        }
+#${CONFIG.vipBoxId} .collect-src-item.search-hit .collect-hit-count {
+            margin-left: 3px;
+        }
+
+#${CONFIG.vipBoxId} .collect-src-item.bad {
             border-style: dashed;
             opacity: 0.7;
         }
@@ -1722,7 +1762,9 @@
     // 自动下一集：默认开（用户定的），开关在采集源标签页
     const COLLECT_NEXT_KEY = 'collect_auto_next';
     let collectAutoNext = GM_getValue(COLLECT_NEXT_KEY, true);
-    const COLLECT_STATE = { items: [], current: null, sourceIdx: -1, busy: false, keyword: '', listName: '', lastEp: null, lastSrcName: '' };
+    const COLLECT_STATE = { items: [], current: null, sourceIdx: -1, busy: false, keyword: '', listName: '', lastEp: null, lastSrcName: '',
+        // 3.6.2 一键搜全部
+        searchAllRunning: false, searchAllResults: [] };
 
     // 剧名清洗用的噪声词（站点名 / 类型词）
     const COLLECT_NOISE_RE = /^(电视剧|电影|动漫|番剧|综艺|纪录片|短剧|网剧|美剧|韩剧|日剧|港剧|国漫|全集|高清|正片|预告|预告片|花絮|在线观看|免费观看|手机版|电脑版|完整版|抢先版|国语|粤语|中文版|bilibili|哔哩哔哩|爱奇艺|腾讯视频|优酷|芒果tv|搜狐视频|乐视|pptv|西瓜视频|1905电影网|咪咕视频|好看视频|acfun|抖音|快手)$/i;
@@ -2435,6 +2477,25 @@
         if (COLLECT_STATE.busy) return;
         const src = COLLECT_ALL[idx];
         if (!src) return;
+
+        // ===== 3.6.2：优先用「一键搜全部」的缓存 =====
+        // 条件：① 一键搜过 ② 剧名没变 ③ 这个源有结果（绿的）
+        // 灰的（无结果）不用缓存，重新搜一次给个机会
+        const kwNow = String((DOM_CACHE.collectKeyword && DOM_CACHE.collectKeyword.value) || '').trim();
+        if (kwNow && kwNow === COLLECT_STATE.keyword && Array.isArray(COLLECT_STATE.searchAllResults)) {
+            const cached = COLLECT_STATE.searchAllResults.find((r) => r && r.src && r.src._idx === idx);
+            if (cached && cached.items && cached.items.length) {
+                // 直接用缓存，不发请求
+                collectMarkSelected(idx);
+                COLLECT_STATE.sourceIdx = idx;
+                COLLECT_STATE.items = cached.items;
+                COLLECT_STATE.current = null;
+                clearCollectView();
+                renderCollectTitles(cached.items, src.name);
+                setCollectStatus('「' + src.name + '」命中 ' + cached.items.length + ' 部（一键搜索缓存）');
+                return;
+            }
+        }
         // 注：采集源里不再提供"强制跳转"入口；同样的跳转在【解析接口】页可用。
         const kw = String((DOM_CACHE.collectKeyword && DOM_CACHE.collectKeyword.value) || '').trim();
         if (!kw) {
@@ -2604,6 +2665,183 @@
             return;
         }
         searchCollectSource(COLLECT_STATE.sourceIdx);
+    }
+
+    // ===== 3.6.2 一键搜全部 =====
+    // 并发搜所有「接口型」采集源（maccms10 / woyun），search 和 random 跳过
+    const SEARCH_ALL_CONCURRENCY = 6;   // 并发数
+    const SEARCH_ALL_TIMEOUT = 15000;    // 单源超时
+
+    // 判断一个采集源能不能并发搜
+    function isSearchableSource(src) {
+        if (!src || !src.api) return false;
+        if (src.fmt === 'random') return false;   // 随机池，不是真源
+        if (src.fmt === 'search') return false;   // 搜索跳转，不是接口
+        return true;
+    }
+
+    // 搜单个源（返回 { src, items, error, ms }），不碰 UI
+    async function searchOneSourceQuiet(src, kw) {
+        const t0 = Date.now();
+        const out = { src: src, items: [], error: null, ms: 0 };
+        try {
+            const res = await requestJson(buildCollectUrl(src, kw));
+            out.ms = Date.now() - t0;
+
+            // 关键词被拒 → 走联想 / 翻列表兜底（跟 doCollectSearch 同一套）
+            const kwRefused = res.searchForbidden
+                || (!res.ok && res.gotResponse && !res.cf && (res.status === 403 || res.status === 401));
+
+            let data = res.data;
+            if (!res.ok && !kwRefused) {
+                out.error = res.error || '请求失败';
+                return out;
+            }
+
+            if (kwRefused || isKeywordSearchForbidden(data)) {
+                const alt = await fetchBySuggest(src.api, kw);
+                if (alt.ok) {
+                    data = alt.data;
+                } else if (alt.gotResponse && !alt.cf) {
+                    const byList = await fetchByRecentList(src.api, kw);
+                    if (!byList.ok) {
+                        out.error = '不支持关键词搜索';
+                        return out;
+                    }
+                    data = byList.data;
+                } else {
+                    out.error = '不支持关键词搜索';
+                    return out;
+                }
+            }
+
+            // 两步型（沃云）
+            if (src.fmt === 'woyun') {
+                const hits = parseWoyunSearch(data);
+                if (!hits.length) { out.error = '没有命中'; return out; }
+                const use = hits.slice(0, COLLECT_TWOSTEP_MAX);
+                for (let i = 0; i < use.length; i++) {
+                    const one = await fetchWoyunDetail(src, use[i]);
+                    if (one) out.items.push(one.item);
+                }
+                if (!out.items.length) out.error = '没取到播放地址';
+                return out;
+            }
+
+            if (!data || !Array.isArray(data.list)) {
+                out.error = '返回结构不认识';
+                return out;
+            }
+            out.items = parseMaccmsJson(data);
+            if (!out.items.length) out.error = data.list.length ? '有结果但取不到地址' : '没有命中';
+        } catch (e) {
+            out.ms = Date.now() - t0;
+            out.error = String((e && e.message) || e);
+        }
+        return out;
+    }
+
+    // 一键搜全部：并发 + 分批 + 实时进度
+    async function searchAllSources() {
+        const kw = String((DOM_CACHE.collectKeyword && DOM_CACHE.collectKeyword.value) || '').trim();
+        if (!kw) {
+            try { vipToast('请输入剧名', '', { icon: 'info', ms: 1800 }); } catch (e) {}
+            return;
+        }
+        if (COLLECT_STATE.searchAllRunning) return;
+
+        const btn = DOM_CACHE.collectSearchAllBtn;
+        const targets = COLLECT_ALL.filter(isSearchableSource);
+        if (!targets.length) {
+            setCollectStatus('没有可并发搜索的采集源');
+            return;
+        }
+
+        COLLECT_STATE.searchAllRunning = true;
+        COLLECT_STATE.searchAllResults = [];
+        clearCollectView();
+        setCollectStatus('正在并发搜索 ' + targets.length + ' 个源…');
+
+        if (btn) {
+            btn.disabled = true;
+            btn.classList.add('running');
+            btn.textContent = '搜索中 0/' + targets.length;
+        }
+
+        let done = 0;
+        const results = [];
+
+        // 分批并发
+        for (let i = 0; i < targets.length; i += SEARCH_ALL_CONCURRENCY) {
+            const batch = targets.slice(i, i + SEARCH_ALL_CONCURRENCY);
+            const settled = await Promise.all(batch.map((src) => searchOneSourceQuiet(src, kw)));
+            settled.forEach((r) => results.push(r));
+            done += batch.length;
+            if (btn) btn.textContent = '搜索中 ' + done + '/' + targets.length;
+            setCollectStatus('正在并发搜索 ' + done + '/' + targets.length + '…（已命中 ' + results.filter((r) => r.items.length).length + ' 个）');
+        }
+
+        COLLECT_STATE.searchAllRunning = false;
+        COLLECT_STATE.searchAllResults = results;
+        COLLECT_STATE.keyword = kw;
+
+        if (btn) {
+            btn.disabled = false;
+            btn.classList.remove('running');
+            btn.textContent = '一键搜全部';
+        }
+
+        renderSearchAllResults(results, kw);
+    }
+
+    // 渲染一键搜索结果
+    function renderSearchAllResults(results, kw) {
+        // 3.6.2：不画结果列表，只给采集源按钮染色
+        //   有结果 → 绿底 + 命中数
+        //   没结果 → 灰底
+        const box = DOM_CACHE.collectSources;
+        if (!box) return;
+
+        // 先清掉上一次的染色
+        box.querySelectorAll('.collect-src-item').forEach((el) => {
+            el.classList.remove('search-hit', 'search-miss');
+            const old = el.querySelector('.collect-hit-count');
+            if (old) old.remove();
+        });
+
+        // 按源名索引结果（COLLECT_ALL 里 _idx 是按钮的 data-idx）
+        const byIdx = {};
+        results.forEach((r) => {
+            if (r && r.src && typeof r.src._idx === 'number') byIdx[r.src._idx] = r;
+        });
+
+        let hitCount = 0, missCount = 0;
+
+        box.querySelectorAll('.collect-src-item').forEach((el) => {
+            const idx = parseInt(el.getAttribute('data-idx'), 10);
+            const r = byIdx[idx];
+            if (!r) return;   // 这个源没参与搜索（search / random 类）
+
+            if (r.items && r.items.length) {
+                el.classList.add('search-hit');
+                hitCount++;
+                // 在名字后面加命中数
+                const span = document.createElement('span');
+                span.className = 'collect-hit-count';
+                span.textContent = r.items.length;
+                el.appendChild(span);
+                // 悬停提示：命中几部 + 耗时
+                const oldTitle = el.getAttribute('title') || '';
+                el.setAttribute('title', oldTitle + '\n\n命中 ' + r.items.length + ' 部 · 耗时 ' + (r.ms / 1000).toFixed(1) + 's');
+            } else {
+                el.classList.add('search-miss');
+                missCount++;
+                const oldTitle2 = el.getAttribute('title') || '';
+                el.setAttribute('title', oldTitle2 + '\n\n' + (r.error || '无结果') + ' · 耗时 ' + (r.ms / 1000).toFixed(1) + 's');
+            }
+        });
+
+        setCollectStatus('「' + kw + '」搜了 ' + results.length + ' 个源：' + hitCount + ' 个有结果（绿色），' + missCount + ' 个无结果（灰色）');
     }
 
     // ===== 导航 =====
@@ -3342,6 +3580,7 @@ https://zzz/?jx= 弹窗"></textarea>
                         <div class="collect-search">
                             <input type="text" id="collect-keyword" placeholder="剧名（自动填入，可修改）">
                             <button id="collect-search-btn">搜索</button>
+                            <button id="collect-search-all-btn">一键搜全部</button>
                         </div>
                         <div class="collect-filter-row">
                             <label><input type="checkbox" id="collect-auto-next-chk"> 自动下一集</label>
@@ -3429,6 +3668,7 @@ https://zzz/?jx= 弹窗"></textarea>
         DOM_CACHE.collectSources = vipBox.querySelector('#collect-sources');
         DOM_CACHE.collectEpisodes = vipBox.querySelector('#collect-episodes');
         DOM_CACHE.collectOutput = vipBox.querySelector('#collect-output');
+        DOM_CACHE.collectSearchAllBtn = vipBox.querySelector('#collect-search-all-btn');
         DOM_CACHE.navLinks = vipBox.querySelector('#nav-links');
         renderCollectSourceList();
         renderNavLinks();
@@ -3632,6 +3872,15 @@ https://zzz/?jx= 弹窗"></textarea>
             collectSearchBtn.addEventListener('click', (e) => {
                 e.stopPropagation();
                 rerunCollectSearch();
+            });
+        }
+
+        // 3.6.2 一键搜全部
+        const collectSearchAllBtn = vipBox.querySelector('#collect-search-all-btn');
+        if (collectSearchAllBtn) {
+            collectSearchAllBtn.addEventListener('click', (e) => {
+                e.stopPropagation();
+                searchAllSources();
             });
         }
         // 点采集源 → 立即用当前剧名搜「这一个源」（每次只发 1 个请求）
