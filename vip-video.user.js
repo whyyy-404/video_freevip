@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         🫧404小站 — 🎬VIP追剧神器 | 完全免费 | 支持多平台 | (电脑/手机/平板...自适应)
 // @namespace    https://scriptcat.org/zh-CN/users/162063
-// @version      3.6.2
+// @version      3.6.2.4
 // @description  ▶在线VIP视频解析工具 (电脑/手机/平板...自适应) | free | 支持多平台【爱奇艺】【腾讯视频】【优酷土豆】【芒果TV】【乐视视频】【哔哩哔哩】【搜狐视频】等常见平台。✨9条解析接口实测可用 ✨内嵌播放无广告 ✨智能切集追剧 ✨内嵌铺满原播放区 ✨一键自动解析  制作不易，有问题可加微信咨询：Why15236444193 [如果加微信未能及时回复，请多多包涵哈！]
 // @author       yyy404
 // @match        *://*/*
@@ -1064,6 +1064,10 @@
 #${CONFIG.vipBoxId} .collect-src-item.search-hit .collect-hit-count {
             margin-left: 3px;
         }
+/* 3.6.2.4：染色时平滑过渡 */
+#${CONFIG.vipBoxId} .collect-src-item {
+            transition: background-color 0.25s ease, border-color 0.25s ease, color 0.25s ease;
+        }
 
 #${CONFIG.vipBoxId} .collect-src-item.bad {
             border-style: dashed;
@@ -1739,7 +1743,7 @@
     ];
 
     const COLLECT_TIMEOUT = 15000;      // 单请求超时(ms)
-    // ===== 采集代理兜底（方案 A）=====
+    // ===== 采集代理兜底 =====
     // 直连失败时，把目标地址拼在代理后面重试（前缀式：代理地址 + 目标URL）
     // 直连失败的源走这个代理重试（第三方服务，可用性与安全性自负）
     // ⚠️ 这是第三方服务器：只在【直连失败】时才用；想彻底关掉就把下面这一行改成空字符串 ''
@@ -1896,7 +1900,7 @@
         }
     }
 
-    // 带代理兜底的 JSON 请求：直连优先，只有【直连失败】才走第三方代理（方案 A）
+    // 带代理兜底的 JSON 请求：直连优先，只有【直连失败】才走第三方代理
     async function requestJson(url, timeout) {
         const direct = await requestJsonOnce(url, timeout);
         if (direct.ok) return direct;
@@ -2760,6 +2764,7 @@
         COLLECT_STATE.searchAllRunning = true;
         COLLECT_STATE.searchAllResults = [];
         clearCollectView();
+        clearAllSourcePaint();   // 3.6.2.4：清掉上一次的染色
         setCollectStatus('正在并发搜索 ' + targets.length + ' 个源…');
 
         if (btn) {
@@ -2769,17 +2774,35 @@
         }
 
         let done = 0;
+        let hitSoFar = 0;
         const results = [];
 
-        // 分批并发
-        for (let i = 0; i < targets.length; i += SEARCH_ALL_CONCURRENCY) {
-            const batch = targets.slice(i, i + SEARCH_ALL_CONCURRENCY);
-            const settled = await Promise.all(batch.map((src) => searchOneSourceQuiet(src, kw)));
-            settled.forEach((r) => results.push(r));
-            done += batch.length;
+        // 3.6.2.4：每个源完成就立即染色
+        //   并发用「信号量」控制：最多 SEARCH_ALL_CONCURRENCY 个在跑
+        //   任何一个完成 → 立即 paintOneSource() + 更新进度
+        function onOneDone(r) {
+            results.push(r);
+            done++;
+            if (r.items && r.items.length) hitSoFar++;
+            paintOneSource(r);
             if (btn) btn.textContent = '搜索中 ' + done + '/' + targets.length;
-            setCollectStatus('正在并发搜索 ' + done + '/' + targets.length + '…（已命中 ' + results.filter((r) => r.items.length).length + ' 个）');
+            setCollectStatus('正在并发搜索 ' + done + '/' + targets.length + '…（已命中 ' + hitSoFar + ' 个）');
         }
+
+        // 信号量式并发：同时最多 N 个
+        let cursor = 0;
+        async function worker() {
+            while (true) {
+                const idx = cursor++;
+                if (idx >= targets.length) return;
+                const r = await searchOneSourceQuiet(targets[idx], kw);
+                onOneDone(r);
+            }
+        }
+        const workers = [];
+        const workerCount = Math.min(SEARCH_ALL_CONCURRENCY, targets.length);
+        for (let w = 0; w < workerCount; w++) workers.push(worker());
+        await Promise.all(workers);
 
         COLLECT_STATE.searchAllRunning = false;
         COLLECT_STATE.searchAllResults = results;
@@ -2795,53 +2818,54 @@
     }
 
     // 渲染一键搜索结果
-    function renderSearchAllResults(results, kw) {
-        // 3.6.2：不画结果列表，只给采集源按钮染色
-        //   有结果 → 绿底 + 命中数
-        //   没结果 → 灰底
+    // ===== 3.6.2.4：单个源染色（每完成一个就调用）=====
+    function paintOneSource(r) {
+        const box = DOM_CACHE.collectSources;
+        if (!box || !r || !r.src || typeof r.src._idx !== 'number') return;
+
+        const el = box.querySelector('.collect-src-item[data-idx="' + r.src._idx + '"]');
+        if (!el) return;
+
+        // 清掉这个源上一次的染色（重复搜索时）
+        el.classList.remove('search-hit', 'search-miss');
+        const oldSpan = el.querySelector('.collect-hit-count');
+        if (oldSpan) oldSpan.remove();
+
+        // 清掉旧的实测提示（title 里 \n\n 之后的部分）
+        const rawTitle = el.getAttribute('title') || '';
+        const baseTitle = rawTitle.split('\n\n')[0];
+
+        if (r.items && r.items.length) {
+            el.classList.add('search-hit');
+            const span = document.createElement('span');
+            span.className = 'collect-hit-count';
+            span.textContent = r.items.length;
+            el.appendChild(span);
+            el.setAttribute('title', baseTitle + '\n\n命中 ' + r.items.length + ' 部 · 耗时 ' + (r.ms / 1000).toFixed(1) + 's');
+        } else {
+            el.classList.add('search-miss');
+            el.setAttribute('title', baseTitle + '\n\n' + (r.error || '无结果') + ' · 耗时 ' + (r.ms / 1000).toFixed(1) + 's');
+        }
+    }
+
+    // 清掉所有源的染色（搜索开始前调用）
+    function clearAllSourcePaint() {
         const box = DOM_CACHE.collectSources;
         if (!box) return;
-
-        // 先清掉上一次的染色
         box.querySelectorAll('.collect-src-item').forEach((el) => {
             el.classList.remove('search-hit', 'search-miss');
             const old = el.querySelector('.collect-hit-count');
             if (old) old.remove();
+            const rawTitle = el.getAttribute('title') || '';
+            el.setAttribute('title', rawTitle.split('\n\n')[0]);
         });
+    }
 
-        // 按源名索引结果（COLLECT_ALL 里 _idx 是按钮的 data-idx）
-        const byIdx = {};
-        results.forEach((r) => {
-            if (r && r.src && typeof r.src._idx === 'number') byIdx[r.src._idx] = r;
-        });
-
-        let hitCount = 0, missCount = 0;
-
-        box.querySelectorAll('.collect-src-item').forEach((el) => {
-            const idx = parseInt(el.getAttribute('data-idx'), 10);
-            const r = byIdx[idx];
-            if (!r) return;   // 这个源没参与搜索（search / random 类）
-
-            if (r.items && r.items.length) {
-                el.classList.add('search-hit');
-                hitCount++;
-                // 在名字后面加命中数
-                const span = document.createElement('span');
-                span.className = 'collect-hit-count';
-                span.textContent = r.items.length;
-                el.appendChild(span);
-                // 悬停提示：命中几部 + 耗时
-                const oldTitle = el.getAttribute('title') || '';
-                el.setAttribute('title', oldTitle + '\n\n命中 ' + r.items.length + ' 部 · 耗时 ' + (r.ms / 1000).toFixed(1) + 's');
-            } else {
-                el.classList.add('search-miss');
-                missCount++;
-                const oldTitle2 = el.getAttribute('title') || '';
-                el.setAttribute('title', oldTitle2 + '\n\n' + (r.error || '无结果') + ' · 耗时 ' + (r.ms / 1000).toFixed(1) + 's');
-            }
-        });
-
-        setCollectStatus('「' + kw + '」搜了 ' + results.length + ' 个源：' + hitCount + ' 个有结果（绿色），' + missCount + ' 个无结果（灰色）');
+    // 全部完成后只更新状态栏（染色已经逐个做过了）
+    function renderSearchAllResults(results, kw) {
+        const hit = results.filter((r) => r.items && r.items.length).length;
+        const miss = results.length - hit;
+        setCollectStatus('「' + kw + '」搜了 ' + results.length + ' 个源：' + hit + ' 个有结果（绿色），' + miss + ' 个无结果（灰色）');
     }
 
     // ===== 导航 =====
