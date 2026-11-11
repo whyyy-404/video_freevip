@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         🫧404小站 — 🎬VIP追剧神器 | 完全免费 | 支持多平台 | (电脑/手机/平板...自适应)
 // @namespace    https://scriptcat.org/zh-CN/users/162063
-// @version      3.6.3
+// @version      3.6.3.4
 // @description  ▶在线VIP视频解析工具 (电脑/手机/平板...自适应) | free | 支持多平台【爱奇艺】【腾讯视频】【优酷土豆】【芒果TV】【乐视视频】【哔哩哔哩】【搜狐视频】等常见平台。✨9条解析接口实测可用 ✨内嵌播放无广告 ✨智能切集追剧 ✨内嵌铺满原播放区 ✨一键自动解析  制作不易，有问题可加微信咨询：Why15236444193 [如果加微信未能及时回复，请多多包涵哈！]
 // @author       yyy404
 // @match        *://*/*
@@ -1047,15 +1047,7 @@
         }
 
 /* 3.6.2：搜索后给采集源按钮染色（背景色取自 颜色.txt）*/
-#${CONFIG.vipBoxId} .collect-src-item.search-hit {
-            background: rgba(63, 185, 80, 0.18) !important;
-            /* 文字颜色继承面板默认色，跟未搜索时完全一样 */
-            border-color: rgba(63, 185, 80, 0.55) !important;
-        }
-#${CONFIG.vipBoxId} .collect-src-item.search-hit:hover {
-            background: rgba(63, 185, 80, 0.28) !important;
-            border-color: rgba(63, 185, 80, 0.8) !important;
-        }
+/* search-hit 的配色由 applyHitColor() 动态注入，可在「面板样式」里调 */
 #${CONFIG.vipBoxId} .collect-src-item.search-miss {
             background: rgba(110, 118, 129, 0.12) !important;
             color: rgba(200, 200, 200, 0.5) !important;
@@ -1766,6 +1758,45 @@
     // 自动下一集：默认开（用户定的），开关在采集源标签页
     const COLLECT_NEXT_KEY = 'collect_auto_next';
     let collectAutoNext = GM_getValue(COLLECT_NEXT_KEY, true);
+    // 采集源「有结果」按钮的配色（在「面板样式」里调）
+    const HIT_COLOR_KEY = 'collect_hit_color';
+    const HIT_ALPHA_KEY = 'collect_hit_alpha';
+    const HIT_COLOR_DEFAULT = '#3fb950';
+    const HIT_ALPHA_DEFAULT = 0.18;
+    let hitColor = GM_getValue(HIT_COLOR_KEY, HIT_COLOR_DEFAULT);
+    let hitAlpha = GM_getValue(HIT_ALPHA_KEY, HIT_ALPHA_DEFAULT);
+
+    // #rrggbb 转成 rgba(r, g, b, a)
+    function hexToRgba(hex, alpha) {
+        const h = String(hex || HIT_COLOR_DEFAULT).replace('#', '');
+        const r = parseInt(h.substr(0, 2), 16) || 0;
+        const g = parseInt(h.substr(2, 2), 16) || 0;
+        const b = parseInt(h.substr(4, 2), 16) || 0;
+        return 'rgba(' + r + ', ' + g + ', ' + b + ', ' + alpha + ')';
+    }
+
+    // 把当前配色写进一个动态 style 标签（只影响界面，不写存储）
+    function applyHitColor() {
+        let st = document.getElementById('vip_hit_color_style');
+        if (!st) {
+            st = document.createElement('style');
+            st.id = 'vip_hit_color_style';
+            (document.head || document.documentElement).appendChild(st);
+        }
+        const base = hexToRgba(hitColor, hitAlpha);
+        const hover = hexToRgba(hitColor, Math.min(1, hitAlpha + 0.1));
+        const border = hexToRgba(hitColor, Math.min(1, hitAlpha + 0.37));
+        const borderHover = hexToRgba(hitColor, Math.min(1, hitAlpha + 0.62));
+        st.textContent = '#' + CONFIG.vipBoxId + ' .collect-src-item.search-hit {'
+            + 'background: ' + base + ' !important;'
+            + 'border-color: ' + border + ' !important;'
+            + '}'
+            + '#' + CONFIG.vipBoxId + ' .collect-src-item.search-hit:hover {'
+            + 'background: ' + hover + ' !important;'
+            + 'border-color: ' + borderHover + ' !important;'
+            + '}';
+    }
+
     const COLLECT_STATE = { items: [], current: null, sourceIdx: -1, busy: false, keyword: '', listName: '', lastEp: null, lastSrcName: '',
         // 3.6.2 一键搜全部
         searchAllRunning: false, searchAllResults: [] };
@@ -3342,6 +3373,19 @@
                 <label>面板宽度：</label>
                 <input type="text" id="style-width" placeholder="如380px" value="${customStyle.width}">
             </div>
+            <div class="style-item">
+                <label>采集源结果色：</label>
+                <input type="color" id="style-hitcolor" value="${hitColor}">
+            </div>
+            <div class="style-item">
+                <label>结果色透明：</label>
+                <input type="range" id="style-hitalpha" min="5" max="100" step="1" value="${Math.round(hitAlpha * 100)}">
+                <span id="style-hitalpha-val" style="font-size:11px;min-width:34px;">${Math.round(hitAlpha * 100)}%</span>
+            </div>
+            <div class="style-item">
+                <label>预览：</label>
+                <span id="style-hitpreview" class="collect-src-item" style="width:auto;cursor:default;">有结果</span>
+            </div>
             <div class="shortcut-tip" style="margin-top:8px;font-size:11px;color:#aaa;">说明：保存后对所有视频网站页面生效（全网统一）。</div>
             <div style="text-align: center; margin-top: 10px;">
                 <button id="save-style-btn">保存</button>
@@ -3378,6 +3422,37 @@
             });
         });
 
+        // 采集源结果色：改了就预览，点「保存」才写存储
+        const hitColorEl = panel.querySelector('#style-hitcolor');
+        const hitAlphaEl = panel.querySelector('#style-hitalpha');
+        const hitAlphaValEl = panel.querySelector('#style-hitalpha-val');
+        const hitPreviewEl = panel.querySelector('#style-hitpreview');
+
+        function refreshHitPreview() {
+            const a = parseFloat(hitAlpha) || HIT_ALPHA_DEFAULT;
+            if (hitPreviewEl) {
+                hitPreviewEl.style.background = hexToRgba(hitColor, a);
+                hitPreviewEl.style.borderColor = hexToRgba(hitColor, Math.min(1, a + 0.37));
+            }
+            if (hitAlphaValEl) hitAlphaValEl.textContent = Math.round(a * 100) + '%';
+        }
+
+        if (hitColorEl) {
+            hitColorEl.addEventListener('input', (e) => {
+                hitColor = e.target.value;
+                applyHitColor();
+                refreshHitPreview();
+            });
+        }
+        if (hitAlphaEl) {
+            hitAlphaEl.addEventListener('input', (e) => {
+                hitAlpha = (parseInt(e.target.value, 10) || 18) / 100;
+                applyHitColor();
+                refreshHitPreview();
+            });
+        }
+        refreshHitPreview();
+
         // 保存按钮
         panel.querySelector('#save-style-btn').addEventListener('click', () => {
             const bgColor = panel.querySelector('#style-bgcolor').value;
@@ -3388,6 +3463,11 @@
             const newStyle = { bgColor, fontColor, opacity, width };
             GM_setValue(CONFIG.customStyleKey, newStyle);
             applyPanelStyle(newStyle);
+
+            // 配色一起保存
+            GM_setValue(HIT_COLOR_KEY, hitColor);
+            GM_setValue(HIT_ALPHA_KEY, hitAlpha);
+            applyHitColor();
 
             vipToast('保存成功', '样式设置已保存', { ms: 1500 });
         });
@@ -3400,6 +3480,16 @@
             panel.querySelector('#style-fontcolor').value = DEFAULT_STYLE.fontColor;
             panel.querySelector('#style-opacity').value = DEFAULT_STYLE.opacity;
             panel.querySelector('#style-width').value = DEFAULT_STYLE.width;
+
+            // 配色一起恢复
+            hitColor = HIT_COLOR_DEFAULT;
+            hitAlpha = HIT_ALPHA_DEFAULT;
+            GM_setValue(HIT_COLOR_KEY, hitColor);
+            GM_setValue(HIT_ALPHA_KEY, hitAlpha);
+            applyHitColor();
+            if (hitColorEl) hitColorEl.value = hitColor;
+            if (hitAlphaEl) hitAlphaEl.value = Math.round(hitAlpha * 100);
+            refreshHitPreview();
 
             vipToast('已恢复默认', '样式已恢复为默认并已保存（所有网站共用）', { ms: 2000 });
         });
@@ -3699,6 +3789,7 @@ https://zzz/?jx= 弹窗"></textarea>
         createShortcutSetPanel();
         createAutoParseSetPanel();
         applyPanelStyle();
+        applyHitColor();
         bindEvents();
     }
 
