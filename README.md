@@ -1,12 +1,13 @@
 <div align="center">
 
-<img src="https://scriptcat.org/api/v2/resource/image/gn4aNtX7Ij3Gcqhn" width="59%" alt="追剧" />
+<img src="https://scriptcat.org/api/v2/resource/image/gn4aNtX7Ij3Gcqhn" style="max-height:200px;width:auto;" alt="追剧" />
 
-<img src="https://scriptcat.org/api/v2/resource/image/WrfYBrlwUZLmqkUz" width="40%" alt="最有趣的熊" />  
+<img src="https://scriptcat.org/api/v2/resource/image/WrfYBrlwUZLmqkUz" style="max-height:185px;width:auto;" alt="最有趣的熊" />  
 
 # 自嘲熊请你看电影 - 404小岛  
 # 🎬 VIP追剧神器脚本
 **多接口智能解析 · 自动下一集 · 去除插播广告 · 长期维护更新 · 完全免费**
+
 [![GitHub Stars](https://img.shields.io/github/stars/whyyy-404/video_freevip?style=flat&logo=github&label=Stars&color=f5c518)](https://github.com/whyyy-404/video_freevip/stargazers)
 [![License: GPL-3.0](https://img.shields.io/badge/License-GPL--3.0-1f6feb.svg)](https://www.gnu.org/licenses/gpl-3.0.txt)
 [![脚本猫](https://img.shields.io/badge/%E8%84%9A%E6%9C%AC%E7%8C%AB-%E7%82%B9%E5%87%BB%E5%AE%89%E8%A3%85-2ea44f)](https://scriptcat.org/zh-CN/script-show-page/3299)

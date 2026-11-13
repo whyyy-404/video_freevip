@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         🫧404小站 — 🎬VIP追剧神器 | 完全免费 | 支持多平台 | (电脑/手机/平板...自适应)
 // @namespace    https://scriptcat.org/zh-CN/users/162063
-// @version      3.6.3.4
+// @version      3.6.4
 // @description  ▶在线VIP视频解析工具 (电脑/手机/平板...自适应) | free | 支持多平台【爱奇艺】【腾讯视频】【优酷土豆】【芒果TV】【乐视视频】【哔哩哔哩】【搜狐视频】等常见平台。✨9条解析接口实测可用 ✨内嵌播放无广告 ✨智能切集追剧 ✨内嵌铺满原播放区 ✨一键自动解析  制作不易，有问题可加微信咨询：Why15236444193 [如果加微信未能及时回复，请多多包涵哈！]
 // @author       yyy404
 // @match        *://*/*
@@ -203,6 +203,18 @@
     //    ② 靠色相之余也拉开明度（黄最亮、粉次之、朱红/橙居中）
     //    ③ 但要说实话：8 家颜色不可能两两都被所有色觉类型分辨。颜色在这里只是【辅助分组】——
     //       名字就写在旁边，不靠颜色也能用，所以不影响功能。
+    // 脚本版本标签：从 GM_info 读，不手写版本号（改 @version 就自动跟随）
+    const SCRIPT_VERSION_TAG = (function () {
+        try {
+            const v = (typeof GM_info !== 'undefined' && GM_info.script && GM_info.script.version) || '';
+            const h = (typeof GM_info !== 'undefined' && GM_info.scriptHandler) || '';
+            if (!v) return '';
+            return 'v' + v + (h ? ' · ' + h : '');
+        } catch (e) {
+            return '';
+        }
+    })();
+
     const API_MARK_COLOR = {
         zip0: '#c6f36b',      // ① 青柠黄绿 —— ZIP0（取自它官网「找到就直接播放」那句的颜色，就是站点主色）
         txnp: '#c9a0f0',      // ② 紫红 —— txnp.cn 一家（TXNQ / 酥皮 / txnp搜索 / cms.txnp.cn）
@@ -301,9 +313,22 @@
             autoImg.src = enabled ? VIP_ICON_GIF.autoOn : VIP_ICON_GIF.autoOff;
         }
         if (autoBtn) {
+            // 未开启时也要显示「当前选中的接口」，方便用户知道会解析成什么
+            // 接口名优先用参数传的，没传就从存储里按索引取
+            let currentName = apiName || '';
+            if (!currentName) {
+                try {
+                    const savedIdx = GM_getValue(CONFIG.autoPlayerVal, null);
+                    if (savedIdx !== null && savedIdx !== undefined && allApis[savedIdx]) {
+                        currentName = allApis[savedIdx].name || '';
+                    }
+                } catch (e) {}
+            }
             autoBtn.title = enabled
-                ? (apiName ? `自动解析已开启：${apiName}（点击关闭）` : '自动解析已开启（点击关闭）')
-                : '点击开启自动解析（需先在自动解析设置中选择接口）';
+                ? (currentName ? `自动解析已开启：${currentName}（点击关闭）` : '自动解析已开启（点击关闭）')
+                : (currentName
+                    ? `点击开启自动解析，当前：${currentName}`
+                    : '点击开启自动解析（需先在自动解析设置中选择接口）');
         }
     }
 
@@ -677,7 +702,21 @@
            ⚠️ 这段 CSS 在【模板字符串】里，注释里不能写反引号，否则会把字符串截断。 */
         #${CONFIG.vipBoxId} .api-must-read .qq,
         #${CONFIG.vipBoxId} .api-must-read .qq b { color: #7dd3fc; }
-        #${CONFIG.vipBoxId} .api-must-read .mr-title { color: #7dd3fc; font-weight: bold; }
+        #${CONFIG.vipBoxId} .api-must-read .mr-head {
+            display: flex;
+            align-items: baseline;
+            justify-content: space-between;
+            gap: 8px;
+        }
+#${CONFIG.vipBoxId} .api-must-read .mr-title { color: #7dd3fc; font-weight: bold; }
+#${CONFIG.vipBoxId} .api-must-read .mr-version {
+            font-size: 11px;
+            /* 用面板默认文字色，不用 opacity 压低（太浅看不清） */
+            color: #DCDCDC;
+            opacity: 0.9;
+            white-space: nowrap;
+            font-weight: normal;
+        }
         /* 标题里那个怒脸单独给红色；「👉必看说明：」继承 .mr-title 的蓝色不变 */
         #${CONFIG.vipBoxId} .api-must-read .mr-title .mr-angry { color: #ff4d4d; }
         #${CONFIG.vipBoxId} .vip_list.visible li {
@@ -2977,7 +3016,10 @@
         // 写在模板里的东西会被冲掉（加自定义接口、切样式都会触发它）。
         complexApisHtml += `
             <div class="api-must-read">
-                <span class="mr-title"><span class="mr-angry">(╬▔皿▔)╯</span>👉必看说明：</span>
+                <div class="mr-head">
+                    <span class="mr-title"><span class="mr-angry">(╬▔皿▔)╯</span>👉必看说明：</span>
+                    <span class="mr-version">${SCRIPT_VERSION_TAG}</span>
+                </div>
                 <br>&nbsp;&nbsp;1、本脚本为开源项目，完全免费，请勿上当受骗
                 <br>&nbsp;&nbsp;2、请勿轻信任何广告，请谨慎辨别！
                 <br>&nbsp;&nbsp;3、如遇卡顿 / 无法加载，可切换不同线路 / 使用海外网络观看
@@ -3595,9 +3637,10 @@
             vipToast('保存成功', `已设置 <b>${selectedApi.name}</b> 为自动解析接口<br><small>点击跳熊/发呆熊浮标控制自动解析</small>`, { html: true, ms: 2000 });
 
             // 更新自动解析按钮的提示
+            // 不管开没开都要更新：没开时也要显示「当前：XXX」，让用户知道选了哪个
             const autoBtn = DOM_CACHE.vipBox.querySelector("#vip_auto");
-            if (autoBtn && !!GM_getValue(CONFIG.autoPlayerKey, null)) {
-                updateAutoSwitchIcon(true, selectedApi.name);
+            if (autoBtn) {
+                updateAutoSwitchIcon(!!GM_getValue(CONFIG.autoPlayerKey, null), selectedApi.name);
             }
         });
 
