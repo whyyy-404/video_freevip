@@ -1,8 +1,8 @@
 <div align="center">
 
-<img src="https://scriptcat.org/api/v2/resource/image/gn4aNtX7Ij3Gcqhn" style="max-height:200px;width:auto;" alt="追剧" />
+<img src="https://scriptcat.org/api/v2/resource/image/gn4aNtX7Ij3Gcqhn" width="59%" alt="追剧" />
 
-<img src="https://scriptcat.org/api/v2/resource/image/WrfYBrlwUZLmqkUz" style="max-height:185px;width:auto;" alt="最有趣的熊" />  
+<img src="https://scriptcat.org/api/v2/resource/image/WrfYBrlwUZLmqkUz" width="40%" alt="最有趣的熊" />  
 
 # 自嘲熊请你看电影 - 404小岛  
 # 🎬 VIP追剧神器脚本
