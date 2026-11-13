@@ -1,4 +1,31 @@
-# 🎬【VIP追剧神器】【free】支持多平台
+<div align="center">
+
+<img src="https://scriptcat.org/api/v2/resource/image/gn4aNtX7Ij3Gcqhn" width="59%" alt="追剧" />
+
+<img src="https://scriptcat.org/api/v2/resource/image/WrfYBrlwUZLmqkUz" width="40%" alt="最有趣的熊" />  
+
+# 自嘲熊请你看电影 - 404小岛  
+# 🎬 VIP追剧神器脚本
+**多接口智能解析 · 自动下一集 · 去除插播广告 · 长期维护更新 · 完全免费**
+[![GitHub Stars](https://img.shields.io/github/stars/whyyy-404/video_freevip?style=flat&logo=github&label=Stars&color=f5c518)](https://github.com/whyyy-404/video_freevip/stargazers)
+[![License: GPL-3.0](https://img.shields.io/badge/License-GPL--3.0-1f6feb.svg)](https://www.gnu.org/licenses/gpl-3.0.txt)
+[![脚本猫](https://img.shields.io/badge/%E8%84%9A%E6%9C%AC%E7%8C%AB-%E7%82%B9%E5%87%BB%E5%AE%89%E8%A3%85-2ea44f)](https://scriptcat.org/zh-CN/script-show-page/3299)
+[![Greasy Fork](https://img.shields.io/badge/Greasy%20Fork-%E7%82%B9%E5%87%BB%E5%AE%89%E8%A3%85-2ea44f)](https://greasyfork.org/zh-CN/scripts/531324)
+[![GitHub Forks](https://img.shields.io/github/forks/whyyy-404/video_freevip?style=flat&logo=github&label=Forks&color=0969da)](https://github.com/whyyy-404/video_freevip/network/members)
+[![Author](https://img.shields.io/badge/Author-yyy404-8250df?style=flat&logo=github&logoColor=white)](https://github.com/whyyy-404)
+
+
+**如果这个项目对你有帮助，欢迎点个 ⭐ Star 支持一下，开源不易，您的支持对我真的很重要！**
+
+如果💕有帮助到你<img src='https://cdn.jsdmirror.com/gh/whyyy-404/icon@main/Collection/Cartoon/sponsor.gif' width='16px' /> 投喂渠道：[微信赞赏](https://github.com/521-baby/521-baby/blob/main/DONATE.md) or [支付宝](https://github.com/521-baby/521-baby/blob/main/DONATE2.md)
+
+[项目概述](#-项目概述) · [主要特性](#-主要特性) · [快速开始](#-快速开始) · [解析操作](#-解析操作详解) · [找片找站](#-找片与找站v350-新增) · [接口清单](#-接口清单) · [常见问题](#-常见问题与解决) · [致谢](#-致谢与参考来源) · [GitHub 仓库](https://github.com/whyyy-404/video_freevip)
+
+</div>
+
+> **本项目完全免费开源。** 如果你是在任何地方「花钱买到」的，说明你被骗了，请立即退款。
+> 任何收费版本均为二次打包的诈骗版本，与本项目无关。
+
 ## 💖 赞助商
 
 <table>
@@ -31,29 +58,34 @@
 ---
 ## 📖 项目概述
 
-这是一个强大的用户脚本，旨在帮助用户免费观看各大视频网站的 VIP 内容。通过集成多个第三方解析接口，该脚本能够绕过视频网站的会员限制，让用户享受免费的视频观看体验。
+这是一个**强大的用户脚本**，旨在帮助用户免费观看各大视频网站的 VIP 内容。通过集成多个**第三方解析接口** 以及 **采集源**，**独家JSON接口**，该脚本能够绕过视频网站的会员限制，让用户享受**免费**的视频观看体验。
 
-> *温馨提示：本脚本使用的解析接口全部收集自互联网。解析出的视频质量（如清晰度）取决于接口提供方，本脚本无法控制或保证。*
+> ***温馨提示**：本脚本使用的解析接口全部收集自互联网。解析出的视频质量（如清晰度）取决于接口提供方，本脚本无法控制或保证。*
+
+### 📁 文件
+
+| 文件 | 内容 |
+| --- | --- |
+| [vip-video.user.js](https://github.com/whyyy-404/video_freevip/blob/main/vip-video.user.js) | 主脚本：VIP 解析 + 采集源 + 导航 + 自动追剧。**已内嵌** [M3u8Filter.user.js](https://github.com/whyyy-404/video_freevip/blob/main/M3u8Filter.user.js)但只作用于「采集源播放」，**作用不到解析接口**（解析接口是第三方跨域 iframe，主脚本注入不进去）|
+| [M3u8Filter.user.js](https://github.com/whyyy-404/video_freevip/blob/main/M3u8Filter.user.js) | M3U8 广告过滤器脚本：6 种删除策略 + 2 种修复。**独立脚本**，`@match *://*/*` 且无 `@noframes`，装了就自动注入所有页面和 iframe —— 所以**单独装它，解析接口的广告也能过滤** |
+| [README.md](https://github.com/whyyy-404/video_freevip/blob/main/README.md) | 项目介绍、快速开始、常见问题（本文件）|
+| [M3u8Filter-README.md](https://github.com/whyyy-404/video_freevip/blob/main/M3u8Filter-README.md) | M3U8 过滤器脚本的完整说明 |
 
 ### 访客人数：
-<img src="https://count.getloli.com/@🎬【VIP追剧神器】【free】支持多平台?theme=rule34" alt="如果您无法看到此内容，请刷新页面。">
+<img src="https://count.getloli.com/@🎬VIP追剧神器?theme=rule34" alt="如果您无法看到此内容，请刷新页面。">
 
-### 🔗 其他链接
-- 脚本源码：[GitHub 仓库](https://github.com/whyyy-404/video_freevip)
-- 如果💕有帮助到你<img src='https://cdn.jsdmirror.com/gh/whyyy-404/icon@main/Collection/Cartoon/sponsor.gif' width='16px' /> 投喂渠道：[⚡爱发电](https://afdian.com/a/chunshu) or [微信赞赏](https://github.com/521-baby/521-baby/blob/main/DONATE.md) or [支付宝](https://github.com/521-baby/521-baby/blob/main/DONATE2.md)
 
 ### 🌟 主要特性
 
-- **多平台支持**：覆盖爱奇艺、腾讯视频、优酷、芒果TV、哔哩哔哩、搜狐、乐视等国内主流视频网站
-- **9 条实测可用的解析接口**：内置 9 个逐一实测确认可用的解析源，支持「内嵌播放」和「弹窗播放」两种模式，随点随换
-- **自动解析**：设置好默认接口后，打开 VIP 视频自动解析播放，无需手动操作
-- **移动端自适应**：手机/平板自动适配 16:9 播放比例，点浮标即可开关面板，关闭按钮常显
-- **原站媒体压制**：Hook 拦截 + 实时监听 + 定时扫描三重保障，杜绝广告原声、双声道
-- **高度自定义**：面板样式、快捷键、自动解析接口、自定义接口，全都可以自己调
-- **位置记忆**：浮标可拖拽到任意位置，刷新后自动记住
-- **接口高亮**：选中的解析接口蓝底高亮，一目了然
-- **采集源找片**：内置 44 条可直接搜索的采集接口，按剧名搜片、剧集按线路分组，支持在页面播放器区直接播放
-- **站点导航**：内置 9 条常用影视站点入口，同色 = 同一家，一键直达
+- **20 条实测解析接口**：内嵌 / 弹窗双模式，随点随换
+- **53 条采集源**：按剧名搜片，剧集按线路分组，页内直接播放
+- **自动追剧，自动下一集**：设好默认接口，打开视频自动解析；采集源播放自动下一集
+- **一键搜全部**：并发搜所有采集源，有结果的按钮实时变绿并显示命中数
+- **去除插播广告**：M3U8 过滤器自动删除广告片段（采集源播放时生效）
+- **多条站点导航**：同色 = 同一家，一键直达
+- **各大平台**：爱奇艺 / 腾讯 / 优酷 / 芒果 / B站 / 搜狐 / 乐视
+- **移动端自适应**：手机 / 平板自动适配 16:9 播放比例，点浮标即可开关面板
+- **完全自定义**：批量添加自定义接口、面板样式（颜色宽度等等）、快捷键
 
 ---
 
@@ -62,24 +94,34 @@
 ## ①. 快速开始
 
 ### 0. 安装用户脚本管理器（若已安装，注意下面的⚠️）
-#### ▶ 脚本猫 (ScriptCat)
+
+<details>
+<summary><b>▶ 脚本猫 (ScriptCat) — 各浏览器安装链接</b></summary>
+
 - **官方网站**：[https://scriptcat.org/](https://scriptcat.org/)
-- **各浏览器安装链接**：
-  - Chrome：[点击安装 ScriptCat for Chrome](https://chrome.google.com/webstore/detail/scriptcat/lhplgjmbpnjgjmpbokdjpcbbekifcmli)
-  - Firefox：[点击安装 ScriptCat for Firefox](https://addons.mozilla.org/zh-CN/firefox/addon/scriptcat/)
-  - Edge：[点击安装 ScriptCat for Edge](https://microsoftedge.microsoft.com/addons/detail/scriptcat/llhcdfddnmmcmlbdennkpdnlnbgbmfak)
-#### ▶ 油猴 (Tampermonkey)
+- Chrome：[点击安装 ScriptCat for Chrome](https://chrome.google.com/webstore/detail/scriptcat/lhplgjmbpnjgjmpbokdjpcbbekifcmli)
+- Firefox：[点击安装 ScriptCat for Firefox](https://addons.mozilla.org/zh-CN/firefox/addon/scriptcat/)
+- Edge：[点击安装 ScriptCat for Edge](https://microsoftedge.microsoft.com/addons/detail/scriptcat/llhcdfddnmmcmlbdennkpdnlnbgbmfak)
+
+</details>
+
+<details>
+<summary><b>▶ 油猴 (Tampermonkey) — 各浏览器安装链接</b></summary>
+
 - **官方网站**：[https://www.tampermonkey.net/](https://www.tampermonkey.net/)
-- **各浏览器安装链接**：
-  - Chrome：[点击安装 Tampermonkey for Chrome](https://chrome.google.com/webstore/detail/tampermonkey/dhdgffkkebhmkfjojejmpbldmpobfkfo)
-  - Firefox：[点击安装 Tampermonkey for Firefox](https://addons.mozilla.org/en-US/firefox/addon/tampermonkey/)
-  - Edge：[点击安装 Tampermonkey for Edge](https://microsoftedge.microsoft.com/addons/detail/tampermonkey/iikmkjmpaadaobahmlepeloendndfphd)
-  - Safari：[点击安装 Tampermonkey for Safari](https://apps.apple.com/us/app/tampermonkey/id1482490089)
+- Chrome：[点击安装 Tampermonkey for Chrome](https://chrome.google.com/webstore/detail/tampermonkey/dhdgffkkebhmkfjojejmpbldmpobfkfo)
+- Firefox：[点击安装 Tampermonkey for Firefox](https://addons.mozilla.org/en-US/firefox/addon/tampermonkey/)
+- Edge：[点击安装 Tampermonkey for Edge](https://microsoftedge.microsoft.com/addons/detail/tampermonkey/iikmkjmpaadaobahmlepeloendndfphd)
+- Safari：[点击安装 Tampermonkey for Safari](https://apps.apple.com/us/app/tampermonkey/id1482490089)
+
+</details>
 
 #### ⚠️(╬▔皿▔)╯脚本管理器权限提醒
 安装 `Tampermonkey / 篡改猴`、`Violentmonkey` 等脚本管理器后，**请手动检查并开启「允许用户脚本」或类似权限**，否则脚本可能不会运行。
 
-**常见检查方法如下**：
+<details>
+<summary><b>常见检查方法如下（点开查看）</b></summary>
+
 1. 打开当前浏览器的 `扩展` 或 `插件` 页面
 2. 找到你已安装的脚本管理器（如 `Tampermonkey / 脚本猫`）
 3. 打开该扩展的详情页
@@ -89,36 +131,43 @@
     - **允许访问站点数据**
     - **允许在此网站上运行**
 
+</details>
+
 **🚨(╯‵□′)╯炸弹！•••*～ 请默认把这一步当成必做项。**
 如果这些权限没有开启，脚本即使安装成功，也可能完全不运行。
 
 ### 1. 安装脚本 及 使用方法
 1. **安装脚本**：在 [Tampermonkey](https://www.tampermonkey.net/) 中安装[本油猴脚本](https://greasyfork.org/zh-CN/scripts/531324-vip%E8%BF%BD%E5%89%A7%E7%A5%9E%E5%99%A8-free-%E6%94%AF%E6%8C%81%E5%A4%9A%E5%B9%B3%E5%8F%B0) 或 [脚本猫](https://scriptcat.org/) 中安装 [本脚本猫脚本](https://scriptcat.org/zh-CN/script-show-page/3299)
 2. **打开视频网站**：访问爱奇艺、腾讯视频、bilibili 等支持的平台
-3. **找到浮标**：页面左侧三个**gif**浮标——**主浮标（自嘲熊）**、**自动解析开关（发呆/跳）**、**公告（猫猫虫）**；也可用 **Alt+V**，或脚本管理器菜单 **「🎬 VIP解析窗口」**，如下图所示：![屏幕截图 2026-08-03 210632.png](https://scriptcat.org/api/v2/resource/image/ssFjt4i4p4UjHuFP)
+3. **找到浮标**：页面左侧三个**gif**浮标——**主浮标（自嘲熊）**、**自动解析开关（发呆/跳）**、**公告（猫猫虫）**；也可用 **Alt+V**，或脚本管理器菜单 **「🎬 VIP解析窗口」**，如下图所示：![屏幕截图 2026-11-12 174013.png](https://scriptcat.org/api/v2/resource/image/KrnrisB8JzcztEEK)
 4. **选择接口和模式**：悬停主浮标打开面板（**手机端点按**）；优先试靠前的 **「TXNQ」「酥皮」「66网1」**；点接口右侧 **「内嵌/弹窗」** 可切换模式
 5. **开始观看**：点选接口后解析播放
-#### ⚠️ 如果脚本安装后没有生效，请优先检查
+
+<details>
+<summary><b>⚠️ 如果脚本安装后没有生效，请优先检查（点开查看）</b></summary>
+
 1. 脚本管理器是否已**启用**
 2. 脚本是否已成功安装并处于**开启状态**
 3. 脚本管理器中是否已开启 **允许用户脚本** 或类似权限
 4. 当前**网站**是否在脚本**支持范围内**
 5. 是否有广告拦截器、隐私插件或浏览器设置阻止脚本运行
 
+</details>
+
 ## ②. 解析操作详解
-1. **手动解析**：
-   - 打开VIP视频页面
+1. <img src="https://scriptcat.org/api/v2/resource/image/zNgf6GxnnOnuCc8P" width="60" height="50" />**手动解析**：
+   - 打开**VIP视频解析**标签页
    - 鼠标悬停（**手机端点按**）左侧 **吃面的自嘲熊** 图标 或 **按 Alt+V** 呼出面板
    - 在面板上的 **VIP视频解析** 标签页，点击任意播放接口 **（推荐靠前的「TXNQ」「酥皮」「66网1」）**
    - 等待解析完成，开始播放
    - **提示**：点击接口名称右侧的"内嵌/弹窗"可切换播放模式
 
-2. **自动解析**：
+2. <img src="https://scriptcat.org/api/v2/resource/image/1CpLdfDw11dp7pVI" width="40" height="40" />**自动解析**：
    - 点击右侧**自定义设置**标签页
    - 点击**自动解析设置**按钮（灰色按钮）
    - 在下拉列表中选择**默认解析接口**（推荐靠前接口）
    - 点击**保存**按钮确认设置
-   - 点中间 **发呆熊/跳熊** 浮标开关（发呆=关，跳=开）；刷新后生效
+   - 点中间 **发呆熊/跳熊** 浮标开关（发呆=关，跳=开）
    - 自动生效，打开VIP视频会**自动解析播放**
 
 3. **追剧切集**
@@ -137,50 +186,48 @@
 3. **搜索跳转**：部分站点支持用剧名拼好地址直接打开它的搜索结果页
    - ⚠️ 个别站第一次会先弹一次人工验证码，过了之后一般不用再输
 
-## ④. 自定义与公告
+## ④. 自定义与公告<img src="https://scriptcat.org/api/v2/resource/image/f2IO8niYAQRFJebi" width="50" height="50" />
 - **自定义设置**标签：添加接口、面板样式、快捷键、自动解析设置
 - **公告浮标**：使用说明 + **赞赏码** 觉得好用可以小额赞助一下额哦（づ￣3￣）づ╭❤️～
 - **拖拽**：可拖主浮标 / 开关 / 公告调整整组位置，松手后 **跨域** 保存
 
-## 🎯 核心功能
+## 🎯 接口清单
 
-### 1. 9 条实测可用的解析接口自由切换
-- **TXNQ / 酥皮**：排最前的两条，实测最好用
-- **66网1 / 66网2 / 麒麟1**：同一家（同色标记）；内嵌被挡时可一键切「弹窗」
-- **邦宁 / 七哥 / M1907 / Node**：其余实测可用接口
-- **自定义接口**：支持添加自己的解析接口
+<details>
+<summary><b>20 条解析接口（点开查看）</b></summary>
 
-### 2. 智能追剧体验
-- **内嵌播放**：直接在当前页面播放，不跳转新窗口，**播放器自适应原视频容器尺寸**
-- **弹窗播放**：支持新窗口播放，部分接口支持选集功能
-- **解析视频**：点击内嵌或弹窗播放接口即可解析当前视频（推荐靠前接口）
-- **自动解析**：可设置默认解析接口，开启后自动解析
-- **解析切集后**：解析完切换新集数后会自动关闭旧播放器，如开启自动解析则自动解析新集数
-- **原视频完全清除**：自动清空原播放器DOM、移除video标签、隐藏VIP提示/广告/弹窗
+| 分组 | 接口 | 说明 |
+| --- | --- | --- |
+| 第一梯队 | TXNQ · 酥皮 · TXNQ2 | 实测最好用，排最前 |
+| 有选集 | 云解析 · 臻享 · 无名小站 | 支持内嵌 / 弹窗 / 带选集全部模式 |
+| 其余可用 | 麒麟1 · 789 · 邦宁 · M1907 | |
+| 仅弹窗 | 66网1 · 66网2 · LX解析 | 排在最后 |
 
-### 3. 采集源找片（v3.5.0 新增）
-- **按剧名搜索**：切到 **采集源** 标签页，输入剧名后点任意采集源即可搜索
-- **44 条采集接口**：按可用性分组；标 **「⚠️ 可用，代理稍慢」** 的几条需要走代理，稳定性一般
-- **剧集按线路分组**：同一个源命中多部时先列片名；选定后剧集按线路分组展示
-- **页内直接播放**：Artplayer / 原生播放器可切换，在页面播放器区直接播放，不跳站
-- **随机组合**：点 **「日常」** 会从一批可直接搜到的源里随机挑一个来搜（悬停可看池子名单）
+</details>
 
-### 4. 站点导航与搜索跳转（v3.5.0 新增）
-- **9 条站点入口**：切到 **导航** 标签页，一键直达
-- **同色 = 同一家**：与解析接口、搜索跳转共用一套颜色标记，一眼认出是同一家
-- **搜索跳转**：部分站点支持用剧名拼好地址直接打开它的搜索结果页；同一家的主站与备用站分列
+<details>
+<summary><b>53 条采集源（点开查看）</b></summary>
 
-### 5. 高度自定义设置
-- **面板样式**：自定义背景色、字体色、透明度、面板宽度
-- **快捷键设置**：自定义快捷键（默认Alt+V呼出面板）
-- **自动解析设置**：选择解析接口，一键保存/关闭
-- **位置记忆**：拖拽调整位置后自动保存
-- **播放器自适应**：PC 与移动端播放器均自动适配原视频容器尺寸
+| 分区 | 数量 | 说明 |
+| --- | --- | --- |
+| ✅ 可用 | 24 | 直连就能搜到 |
+| ✅ 可用 · 自动换接口 | 6 | 内部会换接口重试 |
+| ✅ 可用 · 稍慢 | 1 | |
+| ✅ 可用 · 只能找新剧 | 1 | 老剧搜不到 |
+| ⚠️ 可用，代理稍慢 | 5 | 需要走代理，稳定性一般 |
+| 搜索跳转 | 15 | 跳到对方站自己搜 |
+| 随机池 | 1 | 点「日常」随机挑一个 |
 
-### 6. 多平台全面支持
-- **主流平台**：爱奇艺、腾讯视频、优酷、芒果TV
-- **二次元平台**：哔哩哔哩、乐视视频、搜狐视频
-- **其他平台**：PPTV、1905电影网等
+合计 **53 条**，其中 **37 条**可并发搜索。
+
+</details>
+
+<details>
+<summary><b>22 条站点导航（点开查看）</b></summary>
+
+切到 **导航** 标签页，点任意站点直达。同色 = 同一家（与解析接口、采集源共用一套颜色标记）。
+
+</details>
 
 ---
 ## 📢 重要声明与须知
@@ -202,25 +249,59 @@
 - **网站适配**：支持爱奇艺、腾讯视频、优酷、芒果TV、B站等主流平台
 
 ### ⚠ 常见问题与解决
-### 1. 重音/音画不同步问题 (偶发)
+
+<details>
+<summary><b>1. 重音 / 音画不同步（基本不会）</b></summary>
+
 - **可能原因**：网络速度慢、视频源服务器压力大、解析接口负载高
 - **解决方法**：刷新页面、切换其他接口、检查网络
 
-### 2. 解析失败
+</details>
+
+<details>
+<summary><b>2. 解析失败</b></summary>
+
 - **可能原因**：视频链接格式不正确、解析接口暂时失效、网站更新了防护
 - **解决方法**：确认链接完整、尝试其他接口、等待脚本更新
 
-### 3. 自嘲熊浮标不显示
+</details>
+
+<details>
+<summary><b>3. 自嘲熊浮标不显示</b></summary>
+
 - **可能原因**：网络问题、脚本未开启、网站不在支持列表、浏览器插件冲突
 - **解决方法**：更换网络、开启脚本（或 Alt+V 唤出）、检查支持列表、禁用其他插件
 
-### 4. 采集源搜不到
+</details>
+
+<details>
+<summary><b>4. 采集源搜不到</b></summary>
+
 - **可能原因**：该采集源自身失效、需要走代理、站点短期内不可用，或该源只能搜到近期更新的剧
 - **解决方法**：换另一个采集源重试；或点「日常」让脚本随机换一个；过一段时间再试
 
-- **自动解析无效**：先在设置里选接口并保存 → 开关为「跳熊/开」→ 刷新页面
-- **广告中解析后仍出原声**：请检查当前是否是最新版本（已加强原站媒体压制）；仍异常可反馈
-- **关闭后原片不播**：需刷新（关闭按钮会刷新）；因原容器 DOM 已清空
+</details>
+
+<details>
+<summary><b>5. 自动解析无效</b></summary>
+
+先在设置里选接口并保存 → 开关为「跳熊/开」→ 刷新页面。
+
+</details>
+
+<details>
+<summary><b>6. 广告中解析后仍出原声</b></summary>
+
+请检查当前是否是最新版本（已加强原站媒体压制）；仍异常可反馈。
+
+</details>
+
+<details>
+<summary><b>7. 关闭后原片不播</b></summary>
+
+需刷新（关闭按钮会刷新）；因原容器 DOM 已清空。
+
+</details>
 
 ---
 
@@ -258,9 +339,9 @@
 欢迎提交 Issue 和 PR。为减少来回沟通、提高处理效率，仓库已补充中文模板和基础自动化流程。
 
 ### 问题反馈
-- 提交前请先阅读 [贡献与反馈指南](./CONTRIBUTING.md)
+- 提交前请先阅读 [贡献与反馈指南](https://github.com/whyyy-404/video_freevip/blob/main/CONTRIBUTING.md)
 - GitHub Issues 已区分为：`Bug 反馈`、`功能建议`、`站点兼容 / 解析源异常反馈`
-- **请务必提供完整视频页面 URL、浏览器 / 脚本管理器 / 系统环境、复现步骤，以及必要截图**
+- **请尽量提供完整视频页面 URL、浏览器 / 脚本管理器 / 系统环境、复现步骤，以及截图**
 - **如果是解析问题，请明确具体解析源名称**
 
 ### Pull Request
@@ -281,25 +362,15 @@
 本脚本在其基础上所做的工作：
 
 - **采集源清单**：逐条实测、剔除失效条目、按可用性重新分组，补充搜索 / 代理兜底 / 两步型取数逻辑
-- **M3U8 广告过滤**：改用逐行解析、补充 ppvod 标记识别、增加日志与可测试接口
+- **[M3U8 广告过滤](https://github.com/whyyy-404/video_freevip/blob/main/M3u8Filter.user.js)**：改用逐行解析、补充 ppvod 标记识别、增加日志与可测试接口。
+  它有两种用法 —— ① 主脚本已内嵌，采集源播放时自动生效，不用额外装；
+  ② 想让**解析接口**也过滤广告，把 [M3u8Filter.user.js](https://github.com/whyyy-404/video_freevip/blob/main/M3u8Filter.user.js) 单独装一遍
+  （它自己会注入所有 iframe），详见 [M3u8Filter-README.md](https://github.com/whyyy-404/video_freevip/blob/main/M3u8Filter-README.md)
 
 但**核心思路来自 dashu** —— 再次感谢。
 
 如认为收录或署名方式仍有不妥，欢迎提 Issue 或直接联系，我会立即调整或移除。
 
----
-
-### M3U8 广告过滤
-
-独立脚本 [`M3u8Filter.user.js`](https://github.com/whyyy-404/video_freevip/raw/main/M3u8Filter.user.js)，拦截 m3u8 播放列表中的插播广告片段。
-
-| 策略 | 原理 |
-|---|---|
-| ① 标记型 | 删除 `# ppvod-ad-injected` 之后紧跟的整段广告 |
-| ② 占比型 | 路径占比 < 34% 视为广告（带 4 道保险） |
-| ③ 时长型 | 连续整秒短片段夹在两处 DISCONTINUITY 之间（默认关闭） |
-
-**注意**：只能拦截 JS 发起的请求（XHR / fetch）。直接打开 `.m3u8` 时浏览器用原生 HLS 播放，请求走网络层，脚本无法拦截。
 
 ---
 ## 📄 开源协议 (License)

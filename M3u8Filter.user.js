@@ -1,8 +1,8 @@
 // ==UserScript==
-// @name         M3U8 广告过滤器
+// @name         🫧404小站 — 🎬M3U8 广告过滤器
 // @namespace    https://github.com/whyyy-404/video_freevip
 // @version      1.0.1
-// @description  拦截 m3u8 播放列表，删除插播广告片段（支持 ppvod 标记、路径占比、时长特征三种策略）
+// @description  拦截 m3u8 播放列表，删除插播广告片段（6 种删除策略 + 2 种修复）
 // @author       yyy404
 // @match        *://*/*
 // @exclude      *://*.iqiyi.com/*
@@ -12,6 +12,10 @@
 // @exclude      *://*.bilibili.com/*
 // @grant        none
 // @run-at       document-start
+// @homepageURL  https://github.com/whyyy-404/video_freevip
+// @supportURL   https://github.com/whyyy-404/video_freevip/issues
+// @license      GPL-3.0
+// @icon         https://gcore.jsdelivr.net/gh/whyyy-404/icon@main/Collection/Cartoon/bear-beat.gif
 // ==/UserScript==
 
 /* ============================================================================
