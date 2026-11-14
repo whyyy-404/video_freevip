@@ -1,13 +1,12 @@
 <div align="center">
 
-<img src="https://scriptcat.org/api/v2/resource/image/99FygmVywJp1O0gn
-" width="120" alt="M3U8 广告过滤器" />
+<img src="https://scriptcat.org/api/v2/resource/image/99FygmVywJp1O0gn" width="120" alt="M3U8 广告过滤器" />
 
 # 自嘲熊帮你清广告 - 404小岛
 
 **拦截 m3u8 播放列表，删除插播广告片段 —— 6 种删除策略 + 2 种修复**
 
-[![Version](https://img.shields.io/badge/version-1.0.1-3fd9b8?style=flat)](#)
+[![Version](https://img.shields.io/badge/version-1.0.2-3fd9b8?style=flat)](#)
 [![License: GPL-3.0](https://img.shields.io/badge/License-GPL--3.0-1f6feb.svg)](https://github.com/whyyy-404/video_freevip/blob/main/LICENSE)
 [![脚本猫](https://img.shields.io/badge/%E8%84%9A%E6%9C%AC%E7%8C%AB-%E7%82%B9%E5%87%BB%E5%AE%89%E8%A3%85-3fd9b8?style=flat)](https://scriptcat.org/zh-CN/script-show-page/9073)
 [![Greasy Fork](https://img.shields.io/badge/Greasy%20Fork-%E7%82%B9%E5%87%BB%E5%AE%89%E8%A3%85-ffa64d?style=flat)](https://greasyfork.org/zh-CN/scripts/605297)
@@ -36,32 +35,46 @@
 
 | 用法 | 生效范围 | 怎么装 |
 | --- | --- | --- |
-| **主脚本内嵌** | 只在「采集源播放」时生效 | 装 [vip-video.user.js](https://github.com/whyyy-404/video_freevip/blob/main/vip-video.user.js) 即可，不用额外装 |
-| **独立安装** | 所有页面和 iframe 都生效，**包括解析接口** | [脚本猫](https://scriptcat.org/zh-CN/script-show-page/9073) / [Greasy Fork](https://greasyfork.org/zh-CN/scripts/605297) / [GitHub 直装](https://github.com/whyyy-404/video_freevip/raw/main/M3u8Filter.user.js) |
+| **主脚本内嵌** | 采集源播放 + 解析接口播放，**都生效** | 装 [vip-video.user.js](https://github.com/whyyy-404/video_freevip/blob/main/vip-video.user.js) 即可，不用额外装 |
+| **独立安装** | 所有页面和 iframe 都生效 | [脚本猫](https://scriptcat.org/zh-CN/script-show-page/9073) / [Greasy Fork](https://greasyfork.org/zh-CN/scripts/605297) / [GitHub 直装](https://github.com/whyyy-404/video_freevip/raw/main/M3u8Filter.user.js) |
 
-### 为什么主脚本管不到解析接口？
+### 主脚本是怎么覆盖到解析接口的？
+
+主脚本的 `@match` 是 `*://*/*`，脚本管理器会把它注入到**每一个 frame**，包括解析接口那种第三方跨域 iframe：
 
 ```
-解析接口的播放器在【第三方跨域 iframe】里：
-  <iframe src="https://bfq.txnp.cn/player?url=...">
-  ⇒ 主脚本无法向跨域 iframe 注入脚本
-  ⇒ 内嵌的过滤器只能在主脚本自己创建的 iframe 里生效
+爱奇艺页面（顶层）
+  └── <iframe src="https://art.txnp.cn/...">   ← 解析接口的播放器在这儿
+        └── 主脚本也被注入进来了（脚本管理器行为，不受同源策略限制）
+              └── 检测到自己在 iframe 里 → 注入本过滤器 → 退出
 ```
 
-**而本脚本 `@match *://*/*` 且没有 `@noframes`，脚本管理器会自动把它注入到每个 iframe。**
+顶层页面里，主脚本负责面板、按钮、菜单这些；iframe 里只做「注入过滤器」这一件事。
 
-**⇒ 所以单独装一遍，解析接口的广告也能过滤。**
+**⇒ 所以装一个主脚本就够了，解析接口的广告也能过滤。**
+
+**⇒ 如果某个接口站点有严格 CSP（`script-src` 白名单）挡住了内联 `<script>`，那个站点的过滤会失效。这种情况下单独装本脚本可以兜底 —— 脚本管理器的注入走扩展通道，不受 CSP 限制。**
 
 ### 会重复过滤吗？
 
-不会。脚本开头有防重复标记：
+不会。脚本开头有两道判断：
 
 ```js
+// ① 只处理 HTML 文档
+if (document.contentType && document.contentType !== 'text/html') return;
+
+// ② 每个 frame 只跑一次
 if (window.__M3U8F_LOADED__) return;
 window.__M3U8F_LOADED__ = true;
 ```
 
 每个页面 / iframe 只会执行一次，先加载的赢，后加载的直接退出。
+
+### 为什么排除了那么多站点？
+
+本脚本对**所有**页面生效，但视频站自己（爱奇艺、腾讯、优酷…）、网盘、邮箱、代码托管这些地方既没有采集源的 m3u8，也没有必要劫持它们的请求。排除掉可以省掉每个页面一次脚本解析开销，也避免在无关站点上留痕迹。
+
+当前排除范围：主流视频站 13 个、网盘/云盘 9 个、邮箱 3 个、脚本站/GitHub 4 个、内网地址 5 段。
 
 ---
 
@@ -207,7 +220,7 @@ __M3U8F__.help()
 ### 日志长什么样
 
 ```
-[M3U8过滤] 已加载 v1.0.1（XHR + fetch 劫持已就绪）
+[M3U8过滤] 已加载 v1.0.2（XHR + fetch 劫持已就绪）
 [M3U8过滤] 拦截 https://xxx.com/playlist.m3u8  → 删除 28 个片段
 [M3U8过滤]   · 占比型: 28
 [M3U8过滤] 元数据: TARGETDURATION: #EXT-X-TARGETDURATION:4 → #EXT-X-TARGETDURATION:8

@@ -67,8 +67,8 @@
 
 | 文件 | 内容 |
 | --- | --- |
-| [vip-video.user.js](https://github.com/whyyy-404/video_freevip/blob/main/vip-video.user.js) | 主脚本：VIP 解析 + 采集源 + 导航 + 自动追剧。**已内嵌** [M3u8Filter.user.js](https://github.com/whyyy-404/video_freevip/blob/main/M3u8Filter.user.js)但只作用于「采集源播放」，**作用不到解析接口**（解析接口是第三方跨域 iframe，主脚本注入不进去）|
-| [M3u8Filter.user.js](https://github.com/whyyy-404/video_freevip/blob/main/M3u8Filter.user.js) | M3U8 广告过滤器脚本：6 种删除策略 + 2 种修复。**独立脚本**，`@match *://*/*` 且无 `@noframes`，装了就自动注入所有页面和 iframe —— 所以**单独装它，解析接口的广告也能过滤** |
+| [vip-video.user.js](https://github.com/whyyy-404/video_freevip/blob/main/vip-video.user.js) | 主脚本：VIP 解析 + 采集源 + 导航 + 自动下一集。**已内嵌** [M3u8Filter.user.js](https://github.com/whyyy-404/video_freevip/blob/main/M3u8Filter.user.js)，采集源播放和解析接口播放**都生效** |
+| [M3u8Filter.user.js](https://github.com/whyyy-404/video_freevip/blob/main/M3u8Filter.user.js) | M3U8 广告过滤器脚本：6 种删除策略 + 2 种修复。**独立脚本**，`@match *://*/*` 且无 `@noframes`，装了就自动注入所有页面和 iframe。主脚本已内嵌，一般不需要单独装；接口站点有严格 CSP 时可用它兜底 |
 | [README.md](https://github.com/whyyy-404/video_freevip/blob/main/README.md) | 项目介绍、快速开始、常见问题（本文件）|
 | [M3u8Filter-README.md](https://github.com/whyyy-404/video_freevip/blob/main/M3u8Filter-README.md) | M3U8 过滤器脚本的完整说明 |
 
@@ -82,7 +82,7 @@
 - **53 条采集源**：按剧名搜片，剧集按线路分组，页内直接播放
 - **自动追剧，自动下一集**：设好默认接口，打开视频自动解析；采集源播放自动下一集
 - **一键搜全部**：并发搜所有采集源，有结果的按钮实时变绿并显示命中数
-- **去除插播广告**：M3U8 过滤器自动删除广告片段（采集源播放时生效）
+- **去除插播广告**：M3U8 过滤器自动删除广告片段（采集源播放 + 解析接口播放都生效）
 - **多条站点导航**：同色 = 同一家，一键直达
 - **各大平台**：爱奇艺 / 腾讯 / 优酷 / 芒果 / B站 / 搜狐 / 乐视
 - **移动端自适应**：手机 / 平板自动适配 16:9 播放比例，点浮标即可开关面板
@@ -364,9 +364,9 @@
 
 - **采集源清单**：逐条实测、剔除失效条目、按可用性重新分组，补充搜索 / 代理兜底 / 两步型取数逻辑
 - **[M3U8 广告过滤](https://github.com/whyyy-404/video_freevip/blob/main/M3u8Filter.user.js)**：改用逐行解析、补充 ppvod 标记识别、增加日志与可测试接口。
-  它有两种用法 —— ① 主脚本已内嵌，采集源播放时自动生效，不用额外装；
-  ② 想让**解析接口**也过滤广告，把 [M3u8Filter.user.js](https://github.com/whyyy-404/video_freevip/blob/main/M3u8Filter.user.js) 单独装一遍
-  （它自己会注入所有 iframe），详见 [M3u8Filter-README.md](https://github.com/whyyy-404/video_freevip/blob/main/M3u8Filter-README.md)
+  它有两种用法 —— ① 主脚本已内嵌，采集源播放和解析接口播放都自动生效，不用额外装；
+  ② 接口站点有严格 CSP 挡住内联脚本时，把 [M3u8Filter.user.js](https://github.com/whyyy-404/video_freevip/blob/main/M3u8Filter.user.js) 单独装一遍兜底
+  （脚本管理器的注入走扩展通道，不受 CSP 限制），详见 [M3u8Filter-README.md](https://github.com/whyyy-404/video_freevip/blob/main/M3u8Filter-README.md)
 
 但**核心思路来自 dashu** —— 再次感谢。
 
