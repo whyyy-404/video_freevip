@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         🫧404小站 — 🎬M3U8 广告过滤器
 // @namespace    https://github.com/whyyy-404/video_freevip
-// @version      1.0.1
+// @version      1.0.2
 // @description  拦截 m3u8 播放列表，删除插播广告片段（6 种删除策略 + 2 种修复）
 // @author       yyy404
 // @match        *://*/*
@@ -10,6 +10,34 @@
 // @exclude      *://*.youku.com/*
 // @exclude      *://*.mgtv.com/*
 // @exclude      *://*.bilibili.com/*
+// @exclude      *://*.sohu.com/*
+// @exclude      *://*.pptv.com/*
+// @exclude      *://*.le.com/*
+// @exclude      *://*.ixigua.com/*
+// @exclude      *://*.acfun.cn/*
+// @exclude      *://*.tudou.com/*
+// @exclude      *://*.miguvideo.com/*
+// @exclude      *://*.wasu.cn/*
+// @exclude      *://*.pan.baidu.com/*
+// @exclude      *://*.aliyundrive.com/*
+// @exclude      *://*.alipan.com/*
+// @exclude      *://*.115.com/*
+// @exclude      *://*.123pan.com/*
+// @exclude      *://*.lanzou*/*
+// @exclude      *://*.ctfile.com/*
+// @exclude      *://*.weiyun.com/*
+// @exclude      *://*.mail.qq.com/*
+// @exclude      *://*.mail.163.com/*
+// @exclude      *://*.mail.google.com/*
+// @exclude      *://*.greasyfork.org/*
+// @exclude      *://*.scriptcat.org/*
+// @exclude      *://*.github.com/*
+// @exclude      *://*.githubusercontent.com/*
+// @exclude      *://localhost/*
+// @exclude      *://127.0.0.1/*
+// @exclude      *://192.168.*/*
+// @exclude      *://10.*/*
+// @exclude      *://172.16.*/*
 // @grant        none
 // @run-at       document-start
 // @homepageURL  https://github.com/whyyy-404/video_freevip
@@ -51,6 +79,12 @@
  * ========================================================================== */
 (function () {
     'use strict';
+
+    // 只处理 HTML 文档。图片 / 纯文本 / JSON / PDF 这些不会有播放器，
+    // 也不会有 XHR 劫持的价值，提前退出省掉一次完整解析。
+    try {
+        if (document.contentType && document.contentType !== 'text/html') return;
+    } catch (e) { }
 
     if (window.__M3U8F_LOADED__) return;
     window.__M3U8F_LOADED__ = true;
@@ -1023,7 +1057,7 @@
      * ====================================================================== */
 
     window.__M3U8F__ = {
-        version: '1.0.1',
+        version: '1.0.2',
 
         // 纯函数，可单独测试
         isM3U8: isM3U8,
@@ -1062,5 +1096,5 @@
         }
     };
 
-    log('已加载 v1.0.1（XHR + fetch 劫持已就绪）');
+    log('已加载 v1.0.2（XHR + fetch 劫持已就绪）');
 })();

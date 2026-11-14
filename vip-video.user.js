@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         🫧404小站 — 🎬VIP追剧神器 | 完全免费 | 支持多平台 | (电脑/手机/平板...自适应)
 // @namespace    https://scriptcat.org/zh-CN/users/162063
-// @version      3.6.4
+// @version      3.6.5
 // @description  ▶在线VIP视频解析工具 (电脑/手机/平板...自适应) | free | 支持多平台【爱奇艺】【腾讯视频】【优酷土豆】【芒果TV】【乐视视频】【哔哩哔哩】【搜狐视频】等常见平台。✨9条解析接口实测可用 ✨内嵌播放无广告 ✨智能切集追剧 ✨内嵌铺满原播放区 ✨一键自动解析  制作不易，有问题可加微信咨询：Why15236444193 [如果加微信未能及时回复，请多多包涵哈！]
 // @author       yyy404
 // @match        *://*/*
@@ -60,9 +60,24 @@
 (function() {
     'use strict';
 
-    // ===== 防止在iframe中重复执行 =====
+    // ===== 在 iframe 里只做一件事：注入 m3u8 广告过滤器 =====
+    // 主脚本的 @match 是 *://*/*，脚本管理器会把它注入到每个 frame（含解析接口的跨域 iframe）。
+    // 面板、按钮、菜单、URL 监听这些只能在顶层做，否则会在每个 frame 里重复一遍；
+    // 但广告过滤器恰恰需要在 iframe 里跑 —— 解析接口的播放器就在那儿。
+    // 所以这里不退出了，改为「注入完过滤器再退出」。
+    // 配置直接读 GM 存储：adFilterEnabled 在下方 L1471 才声明，此处读取会命中 TDZ。
     if (window.self !== window.top) {
-        console.log('VIP解析脚本：检测到iframe环境，跳过执行');
+        try {
+            const enabled = GM_getValue('vip_ad_filter_enabled', true);
+            if (enabled && !window.__M3U8F_LOADED__) {
+                const adSrc = getPlayerLib('m3u8Filter');
+                if (adSrc) {
+                    const s = document.createElement('script');
+                    s.textContent = escapeInlineScript(adSrc);
+                    (document.head || document.documentElement).appendChild(s);
+                }
+            }
+        } catch (e) { }
         return;
     }
 
