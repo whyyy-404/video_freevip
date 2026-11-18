@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         🫧404小站 — 🎬VIP追剧神器 | 完全免费 | 支持多平台 | (电脑/手机/平板...自适应)
 // @namespace    https://scriptcat.org/zh-CN/users/162063
-// @version      3.6.5
+// @version      3.7.0
 // @description  ▶在线VIP视频解析工具 (电脑/手机/平板...自适应) | free | 支持多平台【爱奇艺】【腾讯视频】【优酷土豆】【芒果TV】【乐视视频】【哔哩哔哩】【搜狐视频】等常见平台。✨9条解析接口实测可用 ✨内嵌播放无广告 ✨智能切集追剧 ✨内嵌铺满原播放区 ✨一键自动解析  制作不易，有问题可加微信咨询：Why15236444193 [如果加微信未能及时回复，请多多包涵哈！]
 // @author       yyy404
 // @match        *://*/*
@@ -294,7 +294,35 @@
     });
 
     let customApis = GM_getValue("custom_parse_apis", []);
-    let allApis = [...uniqueApis, ...customApis];
+
+    // ===== 编辑模式（3.7.0）=====
+    // 一套状态同时管两个列表：解析接口（可删除）和采集源（决定「一键搜全部」搜哪些）。
+    // 只有点复选框才切换勾选；点接口名字 / 「内嵌|弹窗」照旧走原来的播放和切模式逻辑。
+    // 存储放在 allApis 初始化之前，因为重建 allApis 时就要用删除记录过滤。
+    const DELETED_APIS_KEY = 'vip_deleted_apis';   // 已删除接口的 url 数组
+    const SEARCH_SCOPE_KEY = 'vip_search_scope';   // 参与「一键搜全部」的源名；空数组 = 全部
+
+    let deletedApiUrls = GM_getValue(DELETED_APIS_KEY, []);
+    let searchScopeNames = GM_getValue(SEARCH_SCOPE_KEY, []);
+    if (!Array.isArray(deletedApiUrls)) deletedApiUrls = [];
+    if (!Array.isArray(searchScopeNames)) searchScopeNames = [];
+
+    const EDIT_STATE = {
+        active: false,
+        selectedApis: new Set()      // 接口在 allApis 里的 index
+    };
+
+    // 按删除记录重建 allApis。只过滤「显示用」的这一份，uniqueApis / customApis 本身不动 ——
+    // 这样「恢复已删除」才能原样拿回来。
+    function rebuildAllApis() {
+        const base = [...uniqueApis, ...customApis];
+        allApis = deletedApiUrls.length
+            ? base.filter((a) => a && deletedApiUrls.indexOf(a.url) < 0)
+            : base;
+    }
+
+    let allApis = [];
+    rebuildAllApis();
 
     const vipBoxId = 'vip_jx_box_' + Math.ceil(Math.random() * 100000000);
 
@@ -940,8 +968,13 @@
         /* ===== 采集源标签页 ===== */
         #${CONFIG.vipBoxId} .collect-search {
             display: flex;
-            gap: 6px;
+            /* 三个按钮挤在一起，gap 从 6px 收到 4px，把省下来的宽度全给输入框 */
+            gap: 4px;
             padding: 6px 10px 0 10px;
+            /* ⚠️ 这里【不能】加 align-items: center。
+               3.6.5 靠 flex 默认的 stretch 把所有子项拉成同一高度：
+               「一键搜」的 padding 上下是 0，一旦改成 center 就会缩回文字高度，
+               比旁边「搜索」矮一截。保持 stretch 才能让这一行四个元素齐平。 */
         }
         #${CONFIG.vipBoxId} .collect-search input {
             flex: 1;
@@ -950,7 +983,8 @@
             font-size: 12px;
         }
         #${CONFIG.vipBoxId} .collect-search button {
-            padding: 6px 12px;
+            /* 左右内边距从 12px 收到 9px：文字本身不变，但整体窄了一圈 */
+            padding: 6px 9px;
             font-size: 12px;
             white-space: nowrap;
         }
@@ -1079,6 +1113,139 @@
             border-color: #7dd3fc;
         }
         /* 实测不可用的源：虚线边框 + 变暗，但仍可点击复测 */
+        /* ===== 编辑模式（3.7.0）=====
+           配色沿用面板既有色系：
+             #7dd3fc  面板强调色（出现 12 次，最常用）
+             #1c84c6  「内嵌/弹窗」字样色
+             #3fb950  成功绿（跟一键搜全部同族）
+             #5a5a5a  输入框边框灰
+           文字一律用不透明色，避免叠在深色面板上发灰看不清。 */
+
+/* 「✎ 编辑 / ✓ 完成」开关。
+   必须写成 .collect-search button.edit-toggle-btn 这种复合选择器：
+   .collect-search button 那条规则会把按钮刷成蓝底白字，
+   单写 .edit-toggle-btn 跟它同权重，靠后声明也压不住。 */
+#${CONFIG.vipBoxId} .collect-search button.edit-toggle-btn,
+#${CONFIG.vipBoxId} .section-title button.edit-toggle-btn {
+            background: transparent;
+            color: #7dd3fc;
+            border: 1px solid rgba(125, 211, 252, 0.45);
+            border-radius: 3px;
+            padding: 6px 8px;
+            margin-left: 0;
+            font-size: 12px;
+            font-weight: normal;
+            cursor: pointer;
+            white-space: nowrap;
+            transition: color 0.2s, border-color 0.2s, background-color 0.2s;
+        }
+/* 解析列表的标题是居中文字，按钮绝对定位贴右边（留 10px 呼吸感）。
+   标题行没有输入框，用固定行高让它跟标题视觉居中即可。 */
+#${CONFIG.vipBoxId} .section-title button.edit-toggle-btn {
+            position: absolute;
+            right: 10px;
+            top: 50%;
+            transform: translateY(-50%);
+            padding: 0 8px;
+            line-height: 20px;
+        }
+/* 编辑中：换成绿色，跟「一键搜全部」同一族色，一眼能看出状态 */
+#${CONFIG.vipBoxId} .collect-search button.edit-toggle-btn.active,
+#${CONFIG.vipBoxId} .section-title button.edit-toggle-btn.active {
+            color: #3fb950;
+            border-color: rgba(63, 185, 80, 0.6);
+            background: rgba(63, 185, 80, 0.14);
+        }
+
+/* 复选框：用文字符号而不是 <input>，跟已有的 ＋（api-custom-mark）同一套视觉语言，
+   也不受各平台原生 checkbox 样式差异影响。
+   字号 13px 是为了让 ☐/☑ 的笔画粗细接近正文 —— 15px 时符号比旁边的字明显粗一圈，
+   在面板里很扎眼。 */
+#${CONFIG.vipBoxId} .api-check,
+#${CONFIG.vipBoxId} .src-check {
+            display: inline-block;
+            width: 18px;
+            min-width: 18px;
+            margin-right: 3px;
+            text-align: center;
+            font-size: 13px;
+            line-height: 1;
+            cursor: pointer;
+            user-select: none;
+            -webkit-user-select: none;
+            opacity: 0.7;
+            transition: opacity 0.15s, color 0.15s;
+        }
+#${CONFIG.vipBoxId} .api-check:hover,
+#${CONFIG.vipBoxId} .src-check:hover {
+            opacity: 1;
+        }
+#${CONFIG.vipBoxId} .api-check.checked,
+#${CONFIG.vipBoxId} .src-check.checked {
+            opacity: 1;
+            /* 必须 !important：applyPanelStyle() 会给 .api-item 写行内 color，
+               复选框作为子元素会被继承覆盖。
+               不加 bold：☑ 本身笔画就比 ☐ 粗，再叠粗体在面板里显得笨重，
+               跟 ＋（api-custom-mark）那种细笔画放一起很突兀。靠颜色区分就够了。 */
+            color: #3fb950 !important;
+        }
+
+/* 编辑模式下的操作条 */
+#${CONFIG.vipBoxId} .edit-bar {
+            display: flex;
+            align-items: center;
+            gap: 6px;
+            padding: 6px 8px;
+            margin: 4px 0 8px;
+            background: rgba(28, 132, 198, 0.22);
+            border: 1px solid rgba(125, 211, 252, 0.45);
+            border-radius: 4px;
+            font-size: 12px;
+            color: #f0f6fc !important;
+            clear: both;
+        }
+#${CONFIG.vipBoxId} .edit-bar button {
+            background: rgba(125, 211, 252, 0.18);
+            color: #f0f6fc !important;
+            border: 1px solid rgba(125, 211, 252, 0.5);
+            border-radius: 3px;
+            padding: 2px 10px;
+            font-size: 12px;
+            line-height: 18px;
+            cursor: pointer;
+            transition: background-color 0.15s, border-color 0.15s;
+        }
+#${CONFIG.vipBoxId} .edit-bar button:hover:not(:disabled) {
+            background: rgba(125, 211, 252, 0.32);
+            border-color: rgba(125, 211, 252, 0.75);
+        }
+#${CONFIG.vipBoxId} .edit-bar button.danger {
+            color: #ffb3ab !important;
+            border-color: rgba(248, 81, 73, 0.7);
+            background: rgba(248, 81, 73, 0.22);
+        }
+#${CONFIG.vipBoxId} .edit-bar button.danger:hover:not(:disabled) {
+            background: rgba(248, 81, 73, 0.36);
+        }
+#${CONFIG.vipBoxId} .edit-bar button:disabled {
+            opacity: 0.5;
+            cursor: not-allowed;
+        }
+/* 「恢复已删除」：描边样式，跟旁边三个实心按钮区分开（它不是主操作） */
+#${CONFIG.vipBoxId} .edit-bar button#api_restore_deleted_btn {
+            color: #a5dcf5 !important;
+            border-color: rgba(125, 211, 252, 0.6);
+            background: rgba(125, 211, 252, 0.12);
+        }
+#${CONFIG.vipBoxId} .edit-bar button#api_restore_deleted_btn:hover:not(:disabled) {
+            background: rgba(125, 211, 252, 0.28);
+        }
+#${CONFIG.vipBoxId} .edit-bar .edit-count {
+            margin-left: auto;
+            white-space: nowrap;
+            color: #a5dcf5 !important;
+        }
+
         /* ===== 3.6.2 一键搜全部 ===== */
 #${CONFIG.vipBoxId} #collect-search-all-btn {
             background-color: #238636;
@@ -2196,10 +2363,69 @@
     }
 
     // 源列表渲染：功能(sec) 一级 → 来源(src) 二级
+
+    // 采集源的勾选状态用「显式名字列表」存。
+    // 但空数组必须保留「全部参与」这个含义（老用户存储是空的，且它是默认态），
+    // 所以「一个都不选」得用一个哨兵值表达，不能也用空数组。
+    const SCOPE_NONE = '__none__';
+
+    function isSourceInScope(name) {
+        if (searchScopeNames.length === 0) return true;                    // 空 = 全部
+        if (searchScopeNames.length === 1 && searchScopeNames[0] === SCOPE_NONE) return false;  // 哨兵 = 一个不选
+        return searchScopeNames.indexOf(name) >= 0;
+    }
+
+    // 采集源列表的编辑操作条。
+    // 只留「反选」：一个按钮覆盖全选 / 全不选 / 部分取补集。
+    function buildSrcEditBar() {
+        const total = COLLECT_ALL.filter(isSearchableSource).length;
+        const picked = COLLECT_ALL.filter((x) => isSearchableSource(x) && isSourceInScope(x.name)).length;
+        return '<div class="edit-bar">'
+            + '<button id="src_sel_invert">反选</button>'
+            + '<span class="edit-count">已选 ' + picked + ' / ' + total + '</span>'
+            + '</div>';
+    }
+
+    // 把「全部参与」（空数组）展开成显式名字列表。
+    // 所有改动勾选的操作都先过这一步，保证后续算补集有确切基准。
+    function expandScopeIfAll() {
+        if (searchScopeNames.length === 0) {
+            searchScopeNames = COLLECT_ALL.filter(isSearchableSource).map((x) => x.name);
+        } else if (searchScopeNames.length === 1 && searchScopeNames[0] === SCOPE_NONE) {
+            searchScopeNames = [];      // 哨兵展开成空列表，再往下走就是「一个都没有」
+        }
+    }
+
+    function toggleSourceCheck(name) {
+        expandScopeIfAll();
+        const i = searchScopeNames.indexOf(name);
+        if (i >= 0) searchScopeNames.splice(i, 1);
+        else searchScopeNames.push(name);
+        // 取消完最后一个也得留哨兵，否则会退回「全部」
+        if (!searchScopeNames.length) searchScopeNames = [SCOPE_NONE];
+        GM_setValue(SEARCH_SCOPE_KEY, searchScopeNames);
+        renderCollectSourceList();
+    }
+
+    // 反选：已勾的取消、没勾的勾上。
+    // 先把「全部」展开成显式列表再取补集。
+    // ⚠️ 取补集后如果结果为空，不能直接存空数组 —— 空数组的语义是「全部」，
+    //    那样「全选 → 反选」就会变回全选，用户看到的是「点了没反应」。
+    //    所以这里存一个不可能匹配任何源名的哨兵，保证「一个都不选」能被表达出来。
+    function invertSourceSelection() {
+        const names = COLLECT_ALL.filter(isSearchableSource).map((x) => x.name);
+        expandScopeIfAll();
+        const cur = searchScopeNames;
+        const next = names.filter((n) => cur.indexOf(n) < 0);
+        searchScopeNames = next.length ? next : [SCOPE_NONE];
+        GM_setValue(SEARCH_SCOPE_KEY, searchScopeNames);
+        renderCollectSourceList();
+    }
+
     function renderCollectSourceList() {
         const box = DOM_CACHE.collectSources;
         if (!box) return;
-        let html = '';
+        let html = EDIT_STATE.active ? buildSrcEditBar() : '';
         let lastSec = '';
         COLLECT_GROUPS.forEach((g) => {
             if (g.sec !== lastSec) {
@@ -2220,12 +2446,20 @@
                     const pool = COLLECT_ALL.filter((x) => x.hit && x.fmt !== 'random');
                     tip += '：随机池 ' + pool.length + ' 个源 —— ' + pool.map((x) => x.name).join(' / ');
                 }
-                html += '<span class="' + cls + '"' + mStyle + ' data-idx="' + idx + '" title="' + escapeAttr(tip) + '">'
-                    + escapeAttr(it.name) + '</span>';
+                // 编辑模式：只有能参与「一键搜全部」的源才给复选框（search / random 给了也没意义）
+                let chk = '';
+                if (EDIT_STATE.active && isSearchableSource(it)) {
+                    const on = isSourceInScope(it.name);
+                    chk = '<span class="src-check' + (on ? ' checked' : '') + '">' + (on ? '☑' : '☐') + '</span>';
+                }
+                html += '<span class="' + cls + (EDIT_STATE.active ? ' edit-mode' : '') + '"' + mStyle + ' data-idx="' + idx + '" title="' + escapeAttr(tip) + '">'
+                    + chk + escapeAttr(it.name) + '</span>';
             });
             html += '</div>';
         });
         box.innerHTML = html;
+        // 勾选变化后按钮上的数字要跟着变（syncSearchAllBtnLabel 只改按钮文字，不会回头调本函数）
+        syncSearchAllBtnLabel();
     }
 
     // 命中多部时：先给片名列表让用户挑（只显示当前这一个源的）
@@ -2769,6 +3003,18 @@
         return true;
     }
 
+    // 「一键搜 N」——按钮文字实时反映当前会搜多少个源。
+    // 好处：① 不用另开一行显示计数；② 比「一键搜全部」短，给输入框腾地方；
+    //       ③ 编辑模式下勾选变化立刻能看见，不用去数。
+    // 搜索进行中不要覆盖（那时按钮显示的是「搜索中 x/y」）。
+    function syncSearchAllBtnLabel() {
+        const btn = DOM_CACHE.collectSearchAllBtn;
+        if (!btn) return;
+        if (COLLECT_STATE.searchAllRunning) return;
+        const n = COLLECT_ALL.filter(isSearchableSource).filter((src) => isSourceInScope(src.name)).length;
+        btn.textContent = '一键搜 ' + n;
+    }
+
     // 搜单个源（返回 { src, items, error, ms }），不碰 UI
     async function searchOneSourceQuiet(src, kw) {
         const t0 = Date.now();
@@ -2840,7 +3086,7 @@
         if (COLLECT_STATE.searchAllRunning) return;
 
         const btn = DOM_CACHE.collectSearchAllBtn;
-        const targets = COLLECT_ALL.filter(isSearchableSource);
+        const targets = COLLECT_ALL.filter(isSearchableSource).filter((src) => isSourceInScope(src.name));
         if (!targets.length) {
             setCollectStatus('没有可并发搜索的采集源');
             return;
@@ -2896,8 +3142,8 @@
         if (btn) {
             btn.disabled = false;
             btn.classList.remove('running');
-            btn.textContent = '一键搜全部';
         }
+        syncSearchAllBtnLabel();
 
         renderSearchAllResults(results, kw);
     }
@@ -2981,8 +3227,31 @@
         }
     }
 
+    // 解析列表的编辑操作条。
+    // 只留「反选」一个选择按钮：它已经能覆盖全部场景 ——
+    //   一个没选 → 点 → 全选；全选 → 点 → 一个不选；选了一部分 → 点 → 补集。
+    // 「恢复已删除」始终显示（N=0 时禁用）：用户得先看见有这功能，才敢删。
+    function buildEditBar() {
+        const selCount = EDIT_STATE.selectedApis.size;
+        const delCount = deletedApiUrls.length;
+        return '<div class="edit-bar">'
+            + '<button id="api_sel_invert">反选</button>'
+            + '<button id="api_del_selected" class="danger"' + (selCount ? '' : ' disabled') + '>'
+            + '删除选中（' + selCount + '）</button>'
+            + '<button id="api_restore_deleted_btn"' + (delCount ? '' : ' disabled') + '>'
+            + '↩ 恢复已删除' + (delCount ? '（' + delCount + '）' : '') + '</button>'
+            + '<span class="edit-count">共 ' + allApis.length + ' 个</span>'
+            + '</div>';
+    }
+
     function buildApiListsHtml() {
-        let simpleApisHtml = "<div class='section-title'>[内嵌+弹窗 播放]</div><ul class='simple-api-list'>";
+        // 编辑模式下：标题行右侧换成「完成」，标题行下面插一条操作条。
+        // 复选框状态按接口 index 存，所以同一个接口同时出现在两个列表时，两处一起变。
+        const editBtn = EDIT_STATE.active
+            ? '<button class="edit-toggle-btn active" id="api_edit_toggle">✓ 完成</button>'
+            : '<button class="edit-toggle-btn" id="api_edit_toggle">✎ 编辑</button>';
+        const editBar = EDIT_STATE.active ? buildEditBar() : '';
+        let simpleApisHtml = "<div class='section-title'>[内嵌+弹窗 播放]" + editBtn + "</div>" + editBar + "<ul class='simple-api-list'>";
         let complexApisHtml = "<div class='section-title'>[弹窗带选集]</div><ul class='complex-api-list'>";
 
         allApis.forEach((item, index) => {
@@ -2999,6 +3268,12 @@
             // 就在名字前面加个 ＋ 记号，免得跟内置条目混在一起分不清。
             const isCustom = index >= uniqueApis.length;
             const customMark = isCustom ? '<span class="api-custom-mark">＋</span>' : '';
+            // 编辑模式下每项前面加一个复选框。用文字符号而不是 <input>，
+            // 跟已有的 ＋ 保持同一套视觉语言，也不受各平台原生 checkbox 样式影响。
+            const checked = EDIT_STATE.selectedApis.has(index);
+            const chk = EDIT_STATE.active
+                ? `<span class="api-check${checked ? ' checked' : ''}">${checked ? '☑' : '☐'}</span>`
+                : '';
             // 名字和 title 一律过 escapeAttr：自定义的名字是手输的，
             // 里面若有 " 或 < 会把属性/标签结构弄坏
             const safeName = escapeAttr(name);
@@ -3016,12 +3291,13 @@
             const oneMode = bothModes ? null : (types.includes("1") ? "1" : (types.includes("3") ? "3" : null));
             if (bothModes || (oneMode && !types.includes("2"))) {
                 const attr = bothModes ? ' data-modes="1,3" data-current-mode="1"' : ` data-mode="${oneMode}"`;
-                const cls = bothModes ? "api-item combined-simple" : "api-item";
+                const cls = (bothModes ? "api-item combined-simple" : "api-item") + (EDIT_STATE.active ? " edit-mode" : "");
                 const word = (bothModes || oneMode === "1") ? "内嵌" : "弹窗";
-                simpleApisHtml += `<li class="${cls}"${attr} data-index="${index}" title="${titleAttr}"><span class="api-name"${nameStyle}>${customMark}${safeName}</span><span class="api-mode"> | <span class="mode">${word}</span></span></li>`;
+                simpleApisHtml += `<li class="${cls}"${attr} data-index="${index}" title="${titleAttr}">${chk}<span class="api-name"${nameStyle}>${customMark}${safeName}</span><span class="api-mode"> | <span class="mode">${word}</span></span></li>`;
             }
             if (types.includes("2")) {
-                complexApisHtml += `<li class="api-item" data-index="${index}" data-mode="2" title="${titleAttr}"><span class="api-name"${nameStyle}>${customMark}${safeName}</span></li>`;
+                const cls2 = "api-item" + (EDIT_STATE.active ? " edit-mode" : "");
+                complexApisHtml += `<li class="${cls2}" data-index="${index}" data-mode="2" title="${titleAttr}">${chk}<span class="api-name"${nameStyle}>${customMark}${safeName}</span></li>`;
             }
         });
         simpleApisHtml += "<div style='clear:both;'></div></ul>";
@@ -3042,6 +3318,85 @@
                 <br>&nbsp;&nbsp;<span class="qq"><b>5、交流 QQ 群 请查看公告8</b></span>
             </div>`;
         return { simpleApisHtml, complexApisHtml };
+    }
+
+    // ===== 编辑模式：接口侧 =====
+    // 已删除的接口按 url 记，不按 index —— index 会随「加自定义接口」「删别的接口」漂移。
+
+    function toggleApiCheck(index) {
+        if (EDIT_STATE.selectedApis.has(index)) EDIT_STATE.selectedApis.delete(index);
+        else EDIT_STATE.selectedApis.add(index);
+        renderApiLists();
+    }
+
+    // 反选：已勾的取消、没勾的勾上。
+    // 这一个按钮就够用 —— 一个没选时反选 = 全选；全选时反选 = 一个不选。
+    function invertApiSelection() {
+        const next = new Set();
+        allApis.forEach((_, i) => {
+            if (!EDIT_STATE.selectedApis.has(i)) next.add(i);
+        });
+        EDIT_STATE.selectedApis = next;
+        renderApiLists();
+    }
+
+    function deleteSelectedApis() {
+        const urls = [];
+        EDIT_STATE.selectedApis.forEach((i) => {
+            const a = allApis[i];
+            if (a && a.url) urls.push(a.url);
+        });
+        if (!urls.length) return;
+        let n = 0;
+        urls.forEach((u) => {
+            if (deletedApiUrls.indexOf(u) >= 0) return;
+            deletedApiUrls.push(u);
+            n++;
+        });
+        if (!n) return;
+        GM_setValue(DELETED_APIS_KEY, deletedApiUrls);
+        // 先清勾选再重建：删完接口后 index 会整体前移，旧 index 会指到别的接口上
+        EDIT_STATE.selectedApis.clear();
+        rebuildAllApis();
+        renderApiLists();
+        renderCollectSourceList();
+        try { vipToast('已删除 ' + n + ' 个接口', '点「恢复已删除」可找回', { icon: 'info', ms: 1800 }); } catch (e) { }
+    }
+
+    function restoreDeletedApis() {
+        if (!deletedApiUrls.length) return;
+        const cnt = deletedApiUrls.length;
+        deletedApiUrls = [];
+        GM_setValue(DELETED_APIS_KEY, deletedApiUrls);
+        rebuildAllApis();
+        renderApiLists();
+        renderCollectSourceList();
+        try { vipToast('已恢复 ' + cnt + ' 个接口', '', { icon: 'success', ms: 1800 }); } catch (e) { }
+    }
+
+    // 「编辑 / 完成」按钮写在面板模板里是静态节点（采集源那个），
+    // 解析列表那个由 buildApiListsHtml 每次重新产出，所以只需要同步静态的那个。
+    function syncEditToggle() {
+        const btn = DOM_CACHE.vipBox && DOM_CACHE.vipBox.querySelector('#src_edit_toggle');
+        if (!btn) return;
+        btn.classList.toggle('active', EDIT_STATE.active);
+        btn.textContent = EDIT_STATE.active ? '✓ 完成' : '✎ 编辑';
+    }
+
+    function enterEditMode() {
+        EDIT_STATE.active = true;
+        EDIT_STATE.selectedApis.clear();
+        syncEditToggle();
+        renderApiLists();
+        renderCollectSourceList();
+    }
+
+    function exitEditMode() {
+        EDIT_STATE.active = false;
+        EDIT_STATE.selectedApis.clear();
+        syncEditToggle();
+        renderApiLists();
+        renderCollectSourceList();
     }
 
     function renderApiLists() {
@@ -3281,7 +3636,7 @@
                 const oldCount = customApis.length;
                 customApis = r.items.slice();
                 GM_setValue("custom_parse_apis", customApis);
-                allApis = [...uniqueApis, ...customApis];
+                rebuildAllApis();
                 renderApiLists();
                 ta.dataset.dirty = '';
                 ta.value = serializeCustomApis();
@@ -3750,7 +4105,8 @@ https://zzz/?jx= 弹窗"></textarea>
                         <div class="collect-search">
                             <input type="text" id="collect-keyword" placeholder="剧名（自动填入，可修改）">
                             <button id="collect-search-btn">搜索</button>
-                            <button id="collect-search-all-btn">一键搜全部</button>
+                            <button id="collect-search-all-btn">一键搜</button>
+                            <button class="edit-toggle-btn" id="src_edit_toggle">✎ 编辑</button>
                         </div>
                         <div class="collect-filter-row">
                             <label><input type="checkbox" id="collect-auto-next-chk"> 自动下一集</label>
@@ -3875,6 +4231,9 @@ https://zzz/?jx= 弹窗"></textarea>
     function switchTab(tabId) {
         const box = DOM_CACHE.vipBox;
         if (!box) return;
+        // 切标签页时退出编辑模式：编辑状态只在当前页有效，切走就清掉，
+        // 免得回来时还停在一堆复选框里（勾选内容也跟着丢，这是有意的）。
+        if (EDIT_STATE.active) exitEditMode();
         box.querySelectorAll('.tab-button').forEach(btn => {
             btn.classList.toggle('active', btn.getAttribute('data-tab') === tabId);
         });
@@ -4057,10 +4416,37 @@ https://zzz/?jx= 弹窗"></textarea>
         // 点采集源 → 立即用当前剧名搜「这一个源」（每次只发 1 个请求）
         if (DOM_CACHE.collectSources) {
             DOM_CACHE.collectSources.addEventListener('click', (e) => {
+                // ① 编辑模式：复选框和操作条按钮归编辑逻辑管，点源名照旧搜索
+                if (EDIT_STATE.active) {
+                    const chk = e.target.closest('.src-check');
+                    if (chk) {
+                        e.stopPropagation();
+                        const chip0 = chk.closest('.collect-src-item');
+                        if (chip0) {
+                            const it0 = COLLECT_ALL[parseInt(chip0.getAttribute('data-idx'), 10)];
+                            if (it0) toggleSourceCheck(it0.name);
+                        }
+                        return;
+                    }
+                    const barBtn = e.target.closest('.edit-bar button');
+                    if (barBtn) {
+                        e.stopPropagation();
+                        if (barBtn.id === 'src_sel_invert') { invertSourceSelection(); return; }
+                    }
+                }
                 const chip = e.target.closest('.collect-src-item');
                 if (!chip) return;
                 e.stopPropagation();
                 searchCollectSource(parseInt(chip.getAttribute('data-idx'), 10));
+            });
+        }
+        // 采集源标签页的「✎ 编辑 / ✓ 完成」开关
+        const srcEditToggle = vipBox.querySelector('#src_edit_toggle');
+        if (srcEditToggle) {
+            srcEditToggle.addEventListener('click', (e) => {
+                e.stopPropagation();
+                if (EDIT_STATE.active) exitEditMode();
+                else enterEditMode();
             });
         }
         if (DOM_CACHE.collectEpisodes) {
@@ -4252,6 +4638,35 @@ https://zzz/?jx= 弹窗"></textarea>
             });
         }
         vipBox.querySelector('#vip-tab').addEventListener("click", (e) => {
+            // ① 「✎ 编辑 / ✓ 完成」开关：两种模式下都在标题行，得先判它 ——
+            //    它不在 .edit-bar 里，不能靠下面那条 barBtn 分支兜住。
+            const toggle = e.target.closest('#api_edit_toggle');
+            if (toggle) {
+                e.stopPropagation();
+                if (EDIT_STATE.active) exitEditMode();
+                else enterEditMode();
+                return;
+            }
+            // ② 编辑模式下：复选框和操作条按钮归编辑逻辑管，
+            //    点接口名字 / 「内嵌|弹窗」仍然走下面的原有逻辑（不打断播放和切模式）。
+            if (EDIT_STATE.active) {
+                const chk = e.target.closest('.api-check');
+                if (chk) {
+                    e.stopPropagation();
+                    const li = chk.closest('.api-item');
+                    if (li) toggleApiCheck(parseInt(li.getAttribute('data-index'), 10));
+                    return;
+                }
+                const barBtn = e.target.closest('.edit-bar button');
+                if (barBtn && !barBtn.disabled) {
+                    e.stopPropagation();
+                    switch (barBtn.id) {
+                        case 'api_sel_invert': invertApiSelection(); return;
+                        case 'api_del_selected': deleteSelectedApis(); return;
+                        case 'api_restore_deleted_btn': restoreDeletedApis(); return;
+                    }
+                }
+            }
             // 点「内嵌 / 弹窗」那两个字：只有【两种模式都支持】的接口才切得动（它有 data-modes）。
             // 只有一种模式的跟它长得一样但点了不动（不靠手型提示），所以这里必须显式判断，
             // 否则 togglePlayMode 会在 undefined 上 split(',') 直接抛错。
@@ -4906,7 +5321,7 @@ https://zzz/?jx= 弹窗"></textarea>
             case CONFIG.shortcut.refresh:
                 e.preventDefault();
                 customApis = GM_getValue("custom_parse_apis", []);
-                allApis = [...uniqueApis, ...customApis];
+                rebuildAllApis();
                 renderApiLists();
                 vipToast('刷新成功', '接口列表已重新加载！', { ms: 1500 });
                 break;
