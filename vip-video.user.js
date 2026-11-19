@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         🫧404小站 — 🎬VIP追剧神器 | 完全免费 | 支持多平台 | (电脑/手机/平板...自适应)
 // @namespace    https://scriptcat.org/zh-CN/users/162063
-// @version      3.7.0
+// @version      3.7.1
 // @description  ▶在线VIP视频解析工具 (电脑/手机/平板...自适应) | free | 支持多平台【爱奇艺】【腾讯视频】【优酷土豆】【芒果TV】【乐视视频】【哔哩哔哩】【搜狐视频】等常见平台。✨9条解析接口实测可用 ✨内嵌播放无广告 ✨智能切集追剧 ✨内嵌铺满原播放区 ✨一键自动解析  制作不易，有问题可加微信咨询：Why15236444193 [如果加微信未能及时回复，请多多包涵哈！]
 // @author       yyy404
 // @match        *://*/*
@@ -995,6 +995,18 @@
             text-align: left;
             line-height: 1.5;
         }
+        /* 开关成组排列：桌面面板宽 380，两个开关约 336px 能并排；
+           手机端面板只有 calc(100vw - 88px)（375 视口下仅 287px），并排放不下。
+           用 flex-wrap 让浏览器自己决定换行，不写死「几个一行」，
+           以后再加开关也不用动这段。 */
+        #${CONFIG.vipBoxId} .vip-url-row-group {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 4px 12px;
+        }
+        #${CONFIG.vipBoxId} .vip-url-row-group label {
+            white-space: nowrap;
+        }
         #${CONFIG.vipBoxId} .vip-url-row label {
             cursor: pointer;
             user-select: none;
@@ -1654,6 +1666,114 @@
     // 在播放 iframe 里注入 M3u8Filter，拦截 XHR/fetch 返回的 m3u8，删掉插播广告片段
     const AD_FILTER_KEY = 'vip_ad_filter_enabled';
     let adFilterEnabled = GM_getValue(AD_FILTER_KEY, true);   // 默认开
+
+    // ===== 网页强制缩放 =====
+    // 不少站点的 viewport 写了 user-scalable=no / maximum-scale=1，手机上双指放大直接失效，
+    // 看不清字和字幕。这里把 viewport 改成允许缩放。
+    // 三个要点：
+    //   ① 改【已有】的那个 meta，不追加新的 —— 浏览器只认第一个 viewport，追加的无效。
+    //   ② 记住原值，关开关时还原，不留痕迹。
+    //   ③ 监听 head 变化 —— SPA 站切路由常把 viewport 改回去，得跟着再改一次。
+    const FORCE_ZOOM_KEY = 'vip_force_zoom_enabled';
+    let forceZoomEnabled = GM_getValue(FORCE_ZOOM_KEY, true);   // 默认开
+    const FORCE_ZOOM_CONTENT = 'width=device-width,initial-scale=1,user-scalable=yes';
+    // 三态：undefined = 还没检测过；null = 检测过、站点原本没写 viewport；字符串 = 原始 content
+    let forceZoomOriginal;
+    let forceZoomObserver = null;
+    let forceZoomTimer = null;
+
+    function applyForceZoom() {
+        if (!forceZoomEnabled) return;
+        const head = document.head || document.documentElement;
+        if (!head) return;
+        let meta = document.querySelector('meta[name="viewport"]');
+        if (meta) {
+            // 只记第一次的原值：之后 content 已经被我们改过，再记就成了自己的值
+            if (forceZoomOriginal === undefined) {
+                forceZoomOriginal = meta.getAttribute('content') || '';
+            }
+        } else {
+            if (forceZoomOriginal === undefined) forceZoomOriginal = null;
+            meta = document.createElement('meta');
+            meta.setAttribute('name', 'viewport');
+            head.appendChild(meta);
+        }
+        if (meta.getAttribute('content') !== FORCE_ZOOM_CONTENT) {
+            meta.setAttribute('content', FORCE_ZOOM_CONTENT);
+        }
+    }
+
+    // 关开关时还原：有原值就写回去，原本没这个 meta 就删掉
+    function revertForceZoom() {
+        const meta = document.querySelector('meta[name="viewport"]');
+        if (!meta) return;
+        if (forceZoomOriginal === null) {
+            if (meta.parentNode) meta.parentNode.removeChild(meta);
+        } else if (typeof forceZoomOriginal === 'string') {
+            meta.setAttribute('content', forceZoomOriginal);
+        }
+    }
+
+    // 站点改 viewport 会触发很多次，200ms 内只处理一次
+    function scheduleForceZoom() {
+        if (!forceZoomEnabled || forceZoomTimer) return;
+        forceZoomTimer = setTimeout(() => {
+            forceZoomTimer = null;
+            applyForceZoom();
+        }, 200);
+    }
+
+    function startForceZoomWatch() {
+        if (forceZoomObserver || !forceZoomEnabled) return;
+        const head = document.head || document.documentElement;
+        if (!head) return;
+        forceZoomObserver = new MutationObserver(scheduleForceZoom);
+        forceZoomObserver.observe(head, {
+            childList: true,
+            subtree: true,
+            attributes: true,
+            attributeFilter: ['content']
+        });
+    }
+
+    function stopForceZoomWatch() {
+        if (forceZoomObserver) {
+            forceZoomObserver.disconnect();
+            forceZoomObserver = null;
+        }
+        if (forceZoomTimer) {
+            clearTimeout(forceZoomTimer);
+            forceZoomTimer = null;
+        }
+    }
+
+    // 开关切换的唯一入口：三处调用都走这里，状态同步只写一遍
+    function setForceZoom(on) {
+        forceZoomEnabled = !!on;
+        GM_setValue(FORCE_ZOOM_KEY, forceZoomEnabled);
+        if (forceZoomEnabled) {
+            applyForceZoom();
+            startForceZoomWatch();
+        } else {
+            stopForceZoomWatch();
+            revertForceZoom();
+        }
+    }
+
+    // 启动时按存值应用一次。
+    // @run-at 是 document-start，此刻 head 可能还没生成，挂到 DOMContentLoaded 再试。
+    function initForceZoom() {
+        if (!forceZoomEnabled) return;
+        const boot = () => {
+            applyForceZoom();
+            startForceZoomWatch();
+        };
+        if (document.head) boot();
+        else document.addEventListener('DOMContentLoaded', boot, { once: true });
+    }
+
+    initForceZoom();
+
     const MOBILE_TO_DESKTOP = [
         // 爱奇艺：/v_xxx.html 与 /a_xxx.html 都只换域名
         { re: /^https?:\/\/m\.iqiyi\.com\//i, to: 'https://www.iqiyi.com/' },
@@ -4098,11 +4218,10 @@ https://zzz/?jx= 弹窗"></textarea>
                     </div>
                     <div class="tab-content active" id="vip-tab">
                         <div id="vip-api-lists">${simpleApisHtml}${complexApisHtml}</div>
-                        <div class="vip-url-row">
+                        <div class="vip-url-row vip-url-row-group">
                             <label><input type="checkbox" id="desktop-url-chk"> 手机网址自动转电脑网址</label>
-                        </div>
-                        <div class="vip-url-row">
                             <label><input type="checkbox" id="ad-filter-chk"> 播放时过滤 m3u8 插播广告</label>
+                            <label><input type="checkbox" id="force-zoom-chk"> 手机端网页允许双指缩放</label>
                         </div>
                     </div>
                     <div class="tab-content" id="collect-tab">
@@ -4194,6 +4313,7 @@ https://zzz/?jx= 弹窗"></textarea>
         DOM_CACHE.navTab = vipBox.querySelector('#nav-tab');
         DOM_CACHE.desktopUrlChk = vipBox.querySelector('#desktop-url-chk');
         DOM_CACHE.adFilterChk = vipBox.querySelector('#ad-filter-chk');
+        DOM_CACHE.forceZoomChk = vipBox.querySelector('#force-zoom-chk');
         DOM_CACHE.collectAutoNextChk = vipBox.querySelector('#collect-auto-next-chk');
         DOM_CACHE.collectKeyword = vipBox.querySelector('#collect-keyword');
         DOM_CACHE.collectStatus = vipBox.querySelector('#collect-status');
@@ -4641,6 +4761,13 @@ https://zzz/?jx= 弹窗"></textarea>
             DOM_CACHE.adFilterChk.addEventListener('change', () => {
                 adFilterEnabled = !!DOM_CACHE.adFilterChk.checked;
                 GM_setValue(AD_FILTER_KEY, adFilterEnabled);
+            });
+        }
+        // 网页强制缩放开关
+        if (DOM_CACHE.forceZoomChk) {
+            DOM_CACHE.forceZoomChk.checked = forceZoomEnabled;
+            DOM_CACHE.forceZoomChk.addEventListener('change', () => {
+                setForceZoom(DOM_CACHE.forceZoomChk.checked);
             });
         }
         vipBox.querySelector('#vip-tab').addEventListener("click", (e) => {
