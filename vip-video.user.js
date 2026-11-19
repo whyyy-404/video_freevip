@@ -340,12 +340,12 @@
         <div id="vip-usage-desc" style="text-align:left;color:#FFF;font-size:10px;padding:0px 10px;margin-top:10px;">
             <b>📖 使用说明：</b>
             <br>&nbsp;&nbsp;1、<b>「自定义设置」</b>改样式 / 快捷键 / 接口（加错的接口可在里面的「管理自定义接口」删掉）
-            <br>&nbsp;&nbsp;2、<b>解析视频</b>：点击内嵌接口解析（优先试靠前的「TXNQ」「酥皮」「66网1」等；）
-            <br>&nbsp;&nbsp;3、<b>播放模式</b>：点击接口右侧「内嵌/弹窗」可切换
+            <br>&nbsp;&nbsp;2、<b>解析视频</b>：点击内嵌接口解析（播放模式：点击接口右侧「内嵌/弹窗」可切换）
+            <br>&nbsp;&nbsp;3、<b>自动解析</b>：先在「自动解析设置」选接口，再点发呆熊/跳熊浮标开关
             <br>&nbsp;&nbsp;4、<b>解析切集后</b>：换集后旧播放器会关闭，开自动解析则自动解析新集
-            <br>&nbsp;&nbsp;5、<b>自动解析</b>：先在「自动解析设置」选接口，再点发呆熊/跳熊浮标开关
-            <br>&nbsp;&nbsp;6、<b>快捷键</b>：Alt+V 呼出/隐藏，Alt+R 刷新接口，Alt+S 样式设置
-            <br>&nbsp;&nbsp;7、<b>关闭解析</b>：点击播放器右上角 × 刷新页面恢复原视频（手机端点浮标即可开关面板）
+            <br>&nbsp;&nbsp;5、<b>快捷键</b>：Alt+V 呼出/隐藏，Alt+R 刷新接口，Alt+S 样式设置
+            <br>&nbsp;&nbsp;6、<b>关闭解析</b>：点击播放器右上角 × 刷新页面恢复原视频（手机端点浮标即可开关面板）
+            <br>&nbsp;&nbsp;7、<b>编辑模式</b>：解析页标题行右侧「✎ 编辑」勾选删接；采集源搜索框右侧「✎ 编辑」勾选决定「一键搜」搜哪些
             <br>&nbsp;&nbsp;<span style="color:#7dd3fc;"><b>8、404极阴岛 QQ 群</b>：<span style="font-size:12px;">725752181</span></span>
         </div>`;
 
@@ -570,6 +570,7 @@
         vipBox: null,
         vipList: null,
         vipTab: null,
+        vipApiLists: null,
         donateTab: null,
         simpleApiList: null,
         complexApiList: null,
@@ -1197,17 +1198,17 @@
             gap: 6px;
             padding: 6px 8px;
             margin: 4px 0 8px;
-            background: rgba(28, 132, 198, 0.22);
-            border: 1px solid rgba(125, 211, 252, 0.45);
+            background: rgba(28, 132, 198, 0.26);
+            border: 1px solid rgba(125, 211, 252, 0.5);
             border-radius: 4px;
             font-size: 12px;
             color: #f0f6fc !important;
             clear: both;
         }
 #${CONFIG.vipBoxId} .edit-bar button {
-            background: rgba(125, 211, 252, 0.18);
+            background: rgba(125, 211, 252, 0.2);
             color: #f0f6fc !important;
-            border: 1px solid rgba(125, 211, 252, 0.5);
+            border: 1px solid rgba(125, 211, 252, 0.55);
             border-radius: 3px;
             padding: 2px 10px;
             font-size: 12px;
@@ -1216,34 +1217,36 @@
             transition: background-color 0.15s, border-color 0.15s;
         }
 #${CONFIG.vipBoxId} .edit-bar button:hover:not(:disabled) {
-            background: rgba(125, 211, 252, 0.32);
-            border-color: rgba(125, 211, 252, 0.75);
+            background: rgba(125, 211, 252, 0.36);
+            border-color: rgba(125, 211, 252, 0.8);
         }
 #${CONFIG.vipBoxId} .edit-bar button.danger {
-            color: #ffb3ab !important;
-            border-color: rgba(248, 81, 73, 0.7);
-            background: rgba(248, 81, 73, 0.22);
+            color: #ffb8b1 !important;
+            border-color: rgba(248, 81, 73, 0.72);
+            background: rgba(248, 81, 73, 0.25);
         }
 #${CONFIG.vipBoxId} .edit-bar button.danger:hover:not(:disabled) {
-            background: rgba(248, 81, 73, 0.36);
+            background: rgba(248, 81, 73, 0.38);
         }
+/* 禁用态只降一点点：这两个按钮默认就是禁用（没勾选 / 没删过），
+   压到 0.5 会让文字整片发灰看不清，提到 0.78 又太亮抢眼。0.64 居中。 */
 #${CONFIG.vipBoxId} .edit-bar button:disabled {
-            opacity: 0.5;
+            opacity: 0.64;
             cursor: not-allowed;
         }
 /* 「恢复已删除」：描边样式，跟旁边三个实心按钮区分开（它不是主操作） */
 #${CONFIG.vipBoxId} .edit-bar button#api_restore_deleted_btn {
-            color: #a5dcf5 !important;
-            border-color: rgba(125, 211, 252, 0.6);
-            background: rgba(125, 211, 252, 0.12);
+            color: #b3dff5 !important;
+            border-color: rgba(125, 211, 252, 0.65);
+            background: rgba(125, 211, 252, 0.14);
         }
 #${CONFIG.vipBoxId} .edit-bar button#api_restore_deleted_btn:hover:not(:disabled) {
-            background: rgba(125, 211, 252, 0.28);
+            background: rgba(125, 211, 252, 0.3);
         }
 #${CONFIG.vipBoxId} .edit-bar .edit-count {
             margin-left: auto;
             white-space: nowrap;
-            color: #a5dcf5 !important;
+            color: #b3dff5 !important;
         }
 
         /* ===== 3.6.2 一键搜全部 ===== */
@@ -3400,11 +3403,14 @@
     }
 
     function renderApiLists() {
-        if (!DOM_CACHE.vipTab) return;
+        // ⚠️ 只覆盖 #vip-api-lists，【不能】写 #vip-tab ——
+        //    #vip-tab 里还有两个开关（手机转电脑网址 / 广告过滤），
+        //    整个 innerHTML 覆盖会把它们冲掉（3.6.5 就有这个隐患，只是调用点少没暴露）。
+        if (!DOM_CACHE.vipApiLists) return;
         const { simpleApisHtml, complexApisHtml } = buildApiListsHtml();
-        DOM_CACHE.vipTab.innerHTML = simpleApisHtml + complexApisHtml;
-        DOM_CACHE.simpleApiList = DOM_CACHE.vipTab.querySelector('.simple-api-list');
-        DOM_CACHE.complexApiList = DOM_CACHE.vipTab.querySelector('.complex-api-list');
+        DOM_CACHE.vipApiLists.innerHTML = simpleApisHtml + complexApisHtml;
+        DOM_CACHE.simpleApiList = DOM_CACHE.vipApiLists.querySelector('.simple-api-list');
+        DOM_CACHE.complexApiList = DOM_CACHE.vipApiLists.querySelector('.complex-api-list');
         applyPanelStyle();
     }
 
@@ -4091,8 +4097,7 @@ https://zzz/?jx= 弹窗"></textarea>
                         <button class="tab-button" data-tab="donate">自定义设置</button>
                     </div>
                     <div class="tab-content active" id="vip-tab">
-                        ${simpleApisHtml}
-                        ${complexApisHtml}
+                        <div id="vip-api-lists">${simpleApisHtml}${complexApisHtml}</div>
                         <div class="vip-url-row">
                             <label><input type="checkbox" id="desktop-url-chk"> 手机网址自动转电脑网址</label>
                         </div>
@@ -4178,6 +4183,7 @@ https://zzz/?jx= 弹窗"></textarea>
         DOM_CACHE.vipBox = vipBox;
         DOM_CACHE.vipList = vipBox.querySelector('.vip_list');
         DOM_CACHE.vipTab = vipBox.querySelector('#vip-tab');
+        DOM_CACHE.vipApiLists = vipBox.querySelector('#vip-api-lists');
         DOM_CACHE.donateTab = vipBox.querySelector('#donate-tab');
         DOM_CACHE.customApiEditor = vipBox.querySelector('#custom-api-editor');
         DOM_CACHE.simpleApiList = vipBox.querySelector('.simple-api-list');
