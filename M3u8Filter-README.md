@@ -6,7 +6,7 @@
 
 **拦截 m3u8 播放列表，删除插播广告片段 —— 6 种删除策略 + 2 种修复**
 
-[![Version](https://img.shields.io/badge/version-1.0.2-3fd9b8?style=flat)](#)
+[![Version](https://img.shields.io/badge/version-1.0.3-3fd9b8?style=flat)](#)
 [![License: GPL-3.0](https://img.shields.io/badge/License-GPL--3.0-1f6feb.svg)](https://github.com/whyyy-404/video_freevip/blob/main/LICENSE)
 [![脚本猫](https://img.shields.io/badge/%E8%84%9A%E6%9C%AC%E7%8C%AB-%E7%82%B9%E5%87%BB%E5%AE%89%E8%A3%85-3fd9b8?style=flat)](https://scriptcat.org/zh-CN/script-show-page/9073)
 [![Greasy Fork](https://img.shields.io/badge/Greasy%20Fork-%E7%82%B9%E5%87%BB%E5%AE%89%E8%A3%85-ffa64d?style=flat)](https://greasyfork.org/zh-CN/scripts/605297)
@@ -78,7 +78,7 @@ window.__M3U8F_LOADED__ = true;
 
 ---
 
-## 🎯 6 种删除策略
+## 🎯 7 种删除策略
 
 | # | 策略 | 原理 | 触发条件 |
 | --- | --- | --- | --- |
@@ -88,6 +88,7 @@ window.__M3U8F_LOADED__ = true;
 | ④ | **双路径型** | 只有两条路径时，总时长短的那条视为广告 | 时长比 ≥ 3 倍 |
 | ⑤ | **时长众数型** | 与正片时长众数不符的片段 | 众数占比 ≥ 95% |
 | ⑥ | **URL 长度众数型** | 与正片地址长度众数不符的片段 | 众数占比 ≥ 78.9% |
+| ⑦ | **重复广告块** | 块内 4~6 片、总长 ≤ 25s，且同一段内容在整集里重复出现 | 默认开启 |
 
 ### ① 标记型
 
@@ -152,14 +153,54 @@ window.__M3U8F_LOADED__ = true;
 ⇒ 众数占比 92.4% ≥ 78.9% ⇒ 删除非众数长度的片段
 ```
 
+### ⑦ 重复广告块
+
+**⇒ 同一段广告在整集里被插了 2~3 次，每次的 `.ts` 文件名完全一样。**
+
+```m3u8
+#EXT-X-DISCONTINUITY
+#EXTINF:2.93,
+.../hls/tFQBHTJW.ts        ┐
+#EXTINF:2.93,              │ 广告块（6 片 / 17.6 秒）
+.../hls/3TKXvMGl.ts        │
+#EXTINF:2.94,              │
+.../hls/TV3Ik218.ts        ┘
+#EXT-X-DISCONTINUITY
+...（正片）
+
+#EXT-X-DISCONTINUITY
+#EXTINF:2.93,
+.../hls/tFQBHTJW.ts        ┐ 同一段广告，
+#EXTINF:2.93,              │ 文件名一模一样
+.../hls/3TKXvMGl.ts        │
+#EXTINF:2.94,              │
+.../hls/TV3Ik218.ts        ┘
+#EXT-X-DISCONTINUITY
+```
+
+**⇒ 触发条件（四条全满足）：**
+
+| # | 条件 |
+|---|---|
+| 1 | 块内片段数 **4~6** |
+| 2 | 块总时长 **≤ 25 秒** |
+| 3 | 总时长**不在** `[18, 19)` 区间（正片单段常落这里）|
+| 4 | 该块的 `.ts` 文件名序列**在整集里出现 ≥ 2 次** 或 带填充值特征 |
+
+**⇒ 为什么这条管用：**同一段内容重复出现，只可能是广告或片头回顾，不会是正常正片。
+
+**⇒ 补充判据「填充值」：**部分采集站生成假时长时，小数部分会有连续重复数字（如 `19.6333` / `19.6667`）。这种块即使只出现一次也判定为广告。
+
+**⇒ 默认开启，可用 `filterM3U8(文本, { useDupAd: false })` 关掉。**
+
 ---
 
 ## 🔨 2 种修复
 
 | # | 修复 | 作用 |
 | --- | --- | --- |
-| ⑦ | **孤儿行修复** | 删除广告后残留的孤立 `#EXTINF`（没有对应地址行） |
-| ⑧ | **元数据修正** | 重算 `#EXT-X-TARGETDURATION`、补 `#EXT-X-ENDLIST` |
+| 修复 1 | **孤儿行修复** | 删除广告后残留的孤立 `#EXTINF`（没有对应地址行） |
+| 修复 2 | **元数据修正** | 重算 `#EXT-X-TARGETDURATION`、补 `#EXT-X-ENDLIST` |
 
 **⇒ 这两步默认开启，防止删除后播放器卡顿 / 跳片。**
 
@@ -174,6 +215,24 @@ window.__M3U8F_LOADED__ = true;
 ❌ 直接打开 .m3u8 链接 → 浏览器原生 HLS → 走网络层 → 拦不到
 ```
 
+**⇒ 为什么「直接打开 .m3u8 网址」看不到效果：**
+
+| 做法 | 谁在发请求 | 过滤器能看到吗 |
+|---|---|---|
+| 采集源 / 网页播放器 | 页面里的 **JS**（`fetch` / `XHR`）| ✅ 能 |
+| 地址栏输入 m3u8 | **浏览器内核**（导航请求）| ❌ 完全看不到 |
+
+**⇒ 打个比方：**
+
+```
+XHR / fetch    = 页面 JS「打电话点外卖」→ 我们是接线员，能改订单
+地址栏打开     = 你「自己走进后厨拿菜」→ 接线员管不着
+```
+
+**⇒ 而且那个页面里连播放器都没有，只是一堆文本，就算改也没东西播。**
+
+**⇒ 这不是本脚本的缺陷，是 userscript「XHR/fetch 劫持」这类技术的固有边界 —— 同类的 M3U8 过滤器（包括被参考的 dashu 版本）都一样。**
+
 **⇒ 所以：**
 
 | 场景 | 能过滤吗 |
@@ -182,6 +241,8 @@ window.__M3U8F_LOADED__ = true;
 | 解析接口播放（第三方播放器） | ✅（如果它用 XHR/fetch）|
 | 直接打开 .m3u8 文件 | ❌ |
 | Safari 原生 HLS | ❌ |
+
+**⇒ 想验证效果，请把 m3u8 地址丢进任意 **hls.js 播放器**，而不是直接在地址栏打开。**
 
 ---
 
@@ -203,8 +264,16 @@ __M3U8F__.removeMinorityPaths(文本)
 __M3U8F__.removeShorterPath(文本)
 __M3U8F__.removeByDurationMode(文本)
 __M3U8F__.removeByUrlLengthMode(文本)
+__M3U8F__.removeDiscontinuityAds(文本)
+__M3U8F__.removeDuplicateAdBlocks(文本)   // 策略 ⑦ 重复广告块
 __M3U8F__.repairExtinfPairs(文本)
 __M3U8F__.fixMetadata(文本)
+
+// 判断某个时长是不是「填充值」（策略 ⑦ 的补充判据）
+__M3U8F__.isFillerDuration("19.6333")
+// → true（连续 3 型）
+__M3U8F__.isFillerDuration("19.600")
+// → false（正常时长）
 
 // 解析片段
 __M3U8F__.parseSegments(文本)
@@ -220,7 +289,7 @@ __M3U8F__.help()
 ### 日志长什么样
 
 ```
-[M3U8过滤] 已加载 v1.0.2（XHR + fetch 劫持已就绪）
+[M3U8过滤] 已加载 v1.0.3（XHR + fetch 劫持已就绪）
 [M3U8过滤] 拦截 https://xxx.com/playlist.m3u8  → 删除 28 个片段
 [M3U8过滤]   · 占比型: 28
 [M3U8过滤] 元数据: TARGETDURATION: #EXT-X-TARGETDURATION:4 → #EXT-X-TARGETDURATION:8

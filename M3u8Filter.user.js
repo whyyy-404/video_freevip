@@ -1,8 +1,8 @@
 // ==UserScript==
 // @name         🫧404小站 — 🎬M3U8 广告过滤器
 // @namespace    https://github.com/whyyy-404/video_freevip
-// @version      1.0.2
-// @description  拦截 m3u8 播放列表，删除插播广告片段（6 种删除策略 + 2 种修复）
+// @version      1.0.3
+// @description  拦截 m3u8 播放列表，删除插播广告片段（7 种删除策略 + 2 种修复）
 // @author       yyy404
 // @match        *://*/*
 // @exclude      *://*.iqiyi.com/*
@@ -67,10 +67,18 @@
  *
  *  如认为收录或署名方式不妥，欢迎提 Issue 或联系，我会立即调整或移除。
  *
- *  【三种过滤策略】
+ *  【七种删除策略 + 两种修复】
+ *    【删除】
  *    ① 标记型：删除 "# ppvod-ad-injected" 之后紧跟的整段广告
  *    ② 占比型：统计每个路径前缀的片段数，占比 < 34% 的视为广告
  *    ③ 时长型：连续多个"整秒短片段"（如 3s/4s）夹在两处 DISCONTINUITY 之间
+ *    ④ 双路径型：只有 2 组路径时，删总时长短的那一路
+ *    ⑤ 时长众数型：某一种时长占比 > 98.7% 时，删掉其它时长的片段（默认关）
+ *    ⑥ URL长度众数型：某一种 URL 长度占比 > 78.9% 时，删掉其它长度的片段（默认关）
+ *    ⑦ 重复广告块：块内 4~6 个片段、总时长 <= 25 秒，且内容在整集里重复出现（或带填充值特征）
+ *    【修复】
+ *    · 元数据修正：把 EXT-X-TARGETDURATION 调到与实际片长一致
+ *    · EXTINF 配对修复：清掉孤儿 EXTINF，避免播放器卡顿
  *
  *  【安全设计】
  *    · 每种策略都有阈值保护，宁可不删也不误删
@@ -438,6 +446,159 @@
     }
 
     /**
+     * 判断一个 EXTINF 时长字符串是不是「填充值」
+     * 采集站生成假时长时，常有小数部分「连续重复同一个数字」的特征：
+     *   连续 3 型：1.6333 / 19.6333 / 3.3333
+     *   连续 6 型：1.6667 / 19.6667 / 6.6667
+     * 正常正片的时长是真实的，几乎不会出现连续三位一模一样的小数。
+     * 注：整数部分不限于一位 —— 19.6333 这种两位整数同样要能识别。
+     */
+    var RE_FILLER_3 = /^\s*\d+\.\d*3{3,}\d*\s*$/;
+    var RE_FILLER_6 = /^\s*\d+\.\d*6{3,}\d*\s*$/;
+
+    function isFiller3(durStr) {
+        return RE_FILLER_3.test(String(durStr));
+    }
+    function isFiller6(durStr) {
+        return RE_FILLER_6.test(String(durStr));
+    }
+    function isFillerDuration(durStr) {
+        return isFiller3(durStr) || isFiller6(durStr);
+    }
+
+    /**
+     * 策略 ⑦：重复广告块
+     * 场景：采集站的广告段，被两处 EXT-X-DISCONTINUITY 夹住，
+     *       块内 4~6 个片段、总时长 <= 25 秒，且 EXTINF 带「填充值」特征。
+     *       这类广告在群友实测里是「每集 3~4 段、每段约 18 秒」。
+     * 判据：
+     *   ① 片段总数 >= minSegs（默认 20，避免小文件被处理）
+     *   ② 块内片段数在 minBlock~maxBlock（默认 4~6）
+     *   ③ 块内总时长 <= maxTotal（默认 25 秒）
+     *   ④ 总时长不在 [18, 19) 区间 —— 正片单段常落在这个范围，排除掉更保险
+     *   ⑤ 填充值片段 >= 2 个，或恰好 1 个且那个值是「连续 6」型
+     * 与策略 ③ 的区别：③ 只认整秒短片段（2~6 秒），这里认小数长片段（约 18 秒）。
+     */
+    function removeDuplicateAdBlocks(text, opts) {
+        opts = opts || {};
+        var minSegs = opts.minSegs || 20;
+        var minBlock = opts.minBlock || 4;
+        var maxBlock = opts.maxBlock || 6;
+        var maxTotal = opts.maxTotal || 25;
+
+        var lines = text.split(/\r?\n/);
+        var segs = parseSegments(text);
+        if (segs.length < minSegs) return { text: text, removed: 0, strategy: 'dupAd' };
+
+        var discLines = [];
+        lines.forEach(function (l, i) {
+            if (/^#EXT-X-DISCONTINUITY/i.test(l.trim())) discLines.push(i);
+        });
+        if (discLines.length < 2) {
+            return { text: text, removed: 0, strategy: 'dupAd', reason: 'DISCONTINUITY 少于 2 处' };
+        }
+
+        // 先把所有块切出来，算出每块的「内容签名」
+        var blocks = [];
+        for (var d = 0; d < discLines.length - 1; d++) {
+            var start = discLines[d];
+            var end = discLines[d + 1];
+            var inRange = [];
+            for (var k = 0; k < segs.length; k++) {
+                if (segs[k].lineIdx > start && segs[k].lineIdx < end) inRange.push(segs[k]);
+            }
+            if (!inRange.length) continue;
+
+            var total = 0;
+            var fillerCount = 0;
+            var lastDurStr = '';
+            var tsNames = [];
+            for (var q = 0; q < inRange.length; q++) {
+                var s = inRange[q];
+                total += s.dur;
+                var raw = lines[s.lineIdx] || '';
+                var mm = raw.match(/#EXTINF\s*:\s*([\d.]+)/i);
+                var durStr = mm ? mm[1] : '';
+                lastDurStr = durStr;
+                if (isFillerDuration(durStr)) fillerCount++;
+                tsNames.push((s.url.split('/').pop() || '').split('?')[0]);
+            }
+
+            blocks.push({
+                start: start,
+                end: end,
+                count: inRange.length,
+                total: total,
+                filler: fillerCount,
+                lastDurStr: lastDurStr,
+                sig: tsNames.join('|')
+            });
+        }
+
+        if (!blocks.length) {
+            return { text: text, removed: 0, strategy: 'dupAd', reason: '没有可分析的块' };
+        }
+
+        // 统计每个签名出现几次
+        var sigTimes = {};
+        blocks.forEach(function (b) {
+            if (!b.sig) return;
+            sigTimes[b.sig] = (sigTimes[b.sig] || 0) + 1;
+        });
+
+        var candidates = [];
+        blocks.forEach(function (b) {
+            if (b.count < minBlock || b.count > maxBlock) return;
+            if (b.total > maxTotal) return;
+            if (b.total >= 18 && b.total < 19) return;
+
+            // 判据一：块内容在整集里重复出现（同一段广告插多次）
+            var isDup = b.sig && sigTimes[b.sig] >= 2;
+            // 判据二：EXTINF 带填充值特征（部分采集站用重复数字生成假时长）
+            var isFiller = b.filler >= 2 || (b.filler === 1 && isFiller6(b.lastDurStr));
+
+            if (!isDup && !isFiller) return;
+
+            candidates.push({
+                start: b.start, end: b.end, count: b.count, total: b.total,
+                filler: b.filler, dupTimes: isDup ? sigTimes[b.sig] : 0, by: isDup ? '重复' : '填充值'
+            });
+        });
+
+        if (!candidates.length) {
+            return { text: text, removed: 0, strategy: 'dupAd', reason: '没找到重复/填充值的广告块' };
+        }
+
+        var del = {};
+        var removedCount = 0;
+        candidates.forEach(function (c) {
+            for (var i = c.start + 1; i < c.end; i++) {
+                if (lines[i].trim() !== '') {
+                    del[i] = true;
+                    removedCount++;
+                }
+            }
+        });
+
+        var out = [];
+        for (var i = 0; i < lines.length; i++) {
+            if (del[i]) continue;
+            out.push(lines[i]);
+        }
+
+        log('重复/填充广告块删除: ' + candidates.length + ' 段，' + removedCount + ' 行（' +
+            candidates.map(function (c) { return c.total.toFixed(1) + 's/' + c.count + '片/' + c.by; }).join('、') + '）');
+        return {
+            text: out.join('\n'),
+            removed: removedCount,
+            strategy: 'dupAd',
+            detail: candidates.map(function (c) {
+                return { start: c.start, end: c.end, count: c.count, total: c.total, filler: c.filler, dupTimes: c.dupTimes, by: c.by };
+            })
+        };
+    }
+
+    /**
      * 策略 ④：两路径时，删总时长短的那一路
      * 场景：正片走 CDN-A，广告走 CDN-B，两条路径各自成段
      * 判据：路径只有 2 组，且两组总时长差 >= 3 倍
@@ -663,7 +824,7 @@
     }
 
     /**
-     * 策略 ⑦：修 EXTINF 与 ts 的配对
+     * 修复：EXTINF 与 ts 的配对
      * 场景：m3u8 里 #EXTINF 比 ts 多（或错位），导致播放器卡顿/跳片
      * 做法：只保留「紧跟着 #EXTINF 的 ts」，孤立的 #EXTINF 丢掉
      */
@@ -880,6 +1041,19 @@
             }
         }
 
+        // 策略 ⑦：重复广告块（默认开）
+        // 跟策略 ③ 互补：③ 认整秒短片段（2~6 秒），⑦ 认小数长片段（约 18 秒）
+        if (opts.useDupAd !== false) {
+            var r7ad = removeDuplicateAdBlocks(cur, opts);
+            if (r7ad.removed > 0) {
+                result.strategies.push({ name: '重复广告块', removed: r7ad.removed, detail: r7ad.detail });
+                result.log.push('重复广告块: 删除 ' + r7ad.removed + ' 行');
+                cur = r7ad.text;
+            } else if (r7ad.reason) {
+                result.log.push('重复广告块跳过: ' + r7ad.reason);
+            }
+        }
+
         // 修正元数据
         if (opts.fixMeta !== false) {
             var r4 = fixMetadata(cur);
@@ -889,7 +1063,7 @@
             }
         }
 
-        // 策略 ⑦：修 EXTINF 配对（默认开，防止播放器卡顿）
+        // 修复：修 EXTINF 配对（默认开，防止播放器卡顿）
         if (opts.repairExtinf !== false) {
             var r7 = repairExtinfPairs(cur);
             if (r7.changes > 0) {
@@ -1057,7 +1231,7 @@
      * ====================================================================== */
 
     window.__M3U8F__ = {
-        version: '1.0.2',
+        version: '1.0.3',
 
         // 纯函数，可单独测试
         isM3U8: isM3U8,
@@ -1067,6 +1241,8 @@
         removeMarkedBlocks: removeMarkedBlocks,
         removeMinorityPaths: removeMinorityPaths,
         removeDiscontinuityAds: removeDiscontinuityAds,
+        removeDuplicateAdBlocks: removeDuplicateAdBlocks,
+        isFillerDuration: isFillerDuration,
         removeShorterPath: removeShorterPath,
         removeByDurationMode: removeByDurationMode,
         removeByUrlLengthMode: removeByUrlLengthMode,
@@ -1089,6 +1265,8 @@
             console.log('  __M3U8F__.removeShorterPath(文本)       只测双路径型');
             console.log('  __M3U8F__.removeByDurationMode(文本)    只测时长众数型');
             console.log('  __M3U8F__.removeByUrlLengthMode(文本)   只测URL长度众数型');
+            console.log('  __M3U8F__.removeDuplicateAdBlocks(文本) 只测重复广告块');
+            console.log('  __M3U8F__.isFillerDuration("19.6333")   判断是否填充值时长');
             console.log('  __M3U8F__.repairExtinfPairs(文本)       只测EXTINF配对修复');
             console.log('  __M3U8F__.removeMarkedBlocks(文本)      只测标记型');
             console.log('  __M3U8F__.fixMetadata(文本)             只测元数据修正');
@@ -1096,5 +1274,5 @@
         }
     };
 
-    log('已加载 v1.0.2（XHR + fetch 劫持已就绪）');
+    log('已加载 v1.0.3（XHR + fetch 劫持已就绪）');
 })();
