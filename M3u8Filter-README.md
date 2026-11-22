@@ -6,7 +6,7 @@
 
 **拦截 m3u8 播放列表，删除插播广告片段 —— 6 种删除策略 + 2 种修复**
 
-[![Version](https://img.shields.io/badge/version-1.0.3-3fd9b8?style=flat)](#)
+[![Version](https://img.shields.io/badge/version-1.0.4-3fd9b8?style=flat)](#)
 [![License: GPL-3.0](https://img.shields.io/badge/License-GPL--3.0-1f6feb.svg)](https://github.com/whyyy-404/video_freevip/blob/main/LICENSE)
 [![脚本猫](https://img.shields.io/badge/%E8%84%9A%E6%9C%AC%E7%8C%AB-%E7%82%B9%E5%87%BB%E5%AE%89%E8%A3%85-3fd9b8?style=flat)](https://scriptcat.org/zh-CN/script-show-page/9073)
 [![Greasy Fork](https://img.shields.io/badge/Greasy%20Fork-%E7%82%B9%E5%87%BB%E5%AE%89%E8%A3%85-ffa64d?style=flat)](https://greasyfork.org/zh-CN/scripts/605297)
@@ -215,6 +215,20 @@ window.__M3U8F_LOADED__ = true;
 ❌ 直接打开 .m3u8 链接 → 浏览器原生 HLS → 走网络层 → 拦不到
 ```
 
+### URL 识别规则（v1.0.4 起）
+
+**⇒ 以前只认 `.m3u8` 后缀，会把「假扩展名」的播放列表整个漏掉（实测 TXNQ 的 `/qcb/play.php/<base64>` 就是这种）。现在按三条规则识别：**
+
+| # | 规则 | 例子 |
+|---|---|---|
+| ① | 标准后缀 | `.../index.m3u8`、`.../index.m3u8?token=1` |
+| ② | 假扩展名的播放列表端点 | `.../play.php/<base64>`、`.../playlist.php?id=` |
+| ③ | 参数声明格式 | `...?type=m3u8`、`...?format=m3u8` |
+
+**⇒ 这三条只是「要不要检查内容」的门票，真正动手前还有一道内容检查：响应必须以 `#EXTM3U` 开头。**
+
+**⇒ 所以就算 URL 猜错了也不会误删 —— 有的接口（比如 TXNQ 的 `play.php`）返回的其实是 MP4，只是 `Content-Type` 谎报成 `application/vnd.apple.mpegurl`，这种情况会被内容检查挡掉。**
+
 **⇒ 为什么「直接打开 .m3u8 网址」看不到效果：**
 
 | 做法 | 谁在发请求 | 过滤器能看到吗 |
@@ -289,7 +303,7 @@ __M3U8F__.help()
 ### 日志长什么样
 
 ```
-[M3U8过滤] 已加载 v1.0.3（XHR + fetch 劫持已就绪）
+[M3U8过滤] 已加载 v1.0.4（XHR + fetch 劫持已就绪）
 [M3U8过滤] 拦截 https://xxx.com/playlist.m3u8  → 删除 28 个片段
 [M3U8过滤]   · 占比型: 28
 [M3U8过滤] 元数据: TARGETDURATION: #EXT-X-TARGETDURATION:4 → #EXT-X-TARGETDURATION:8

@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         🫧404小站 — 🎬M3U8 广告过滤器
 // @namespace    https://github.com/whyyy-404/video_freevip
-// @version      1.0.3
+// @version      1.0.4
 // @description  拦截 m3u8 播放列表，删除插播广告片段（7 种删除策略 + 2 种修复）
 // @author       yyy404
 // @match        *://*/*
@@ -1090,7 +1090,16 @@
     function isM3U8Url(url) {
         if (!url) return false;
         var u = String(url);
-        return /\.m3u8(?:\?|$)/i.test(u);
+        // ① 标准后缀
+        if (/\.m3u8(?:\?|$)/i.test(u)) return true;
+        // ② 假扩展名的播放列表端点。
+        //    有些解析接口把 m3u8 挂在 play.php / playlist.php 这类地址后面，
+        //    响应头是 application/vnd.apple.mpegurl，URL 里却没有 .m3u8 —— 
+        //    只看后缀会把它们整个漏掉（实测 TXNQ 的 /qcb/play.php/<base64> 就是这种）。
+        if (/(?:play|playlist|m3u8list|live|vod)\.(?:php|asp|aspx|jsp)(?:[\/?]|$)/i.test(u)) return true;
+        // ③ 用参数声明格式的
+        if (/[?&](?:type|format|ext|fmt)=m3u8/i.test(u)) return true;
+        return false;
     }
 
     function handleText(url, text) {
@@ -1231,7 +1240,7 @@
      * ====================================================================== */
 
     window.__M3U8F__ = {
-        version: '1.0.3',
+        version: '1.0.4',
 
         // 纯函数，可单独测试
         isM3U8: isM3U8,
@@ -1274,5 +1283,5 @@
         }
     };
 
-    log('已加载 v1.0.3（XHR + fetch 劫持已就绪）');
+    log('已加载 v1.0.4（XHR + fetch 劫持已就绪）');
 })();
