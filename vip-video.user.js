@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         🫧404小站 — 🎬VIP追剧神器 | 完全免费 | 支持多平台 | (电脑/手机/平板...自适应)
 // @namespace    https://scriptcat.org/zh-CN/users/162063
-// @version      3.7.2
+// @version      3.7.3
 // @description  ▶在线VIP视频解析工具 (电脑/手机/平板...自适应) | free | 支持多平台【爱奇艺】【腾讯视频】【优酷土豆】【芒果TV】【乐视视频】【哔哩哔哩】【搜狐视频】等常见平台。✨9条解析接口实测可用 ✨内嵌播放无广告 ✨智能切集追剧 ✨内嵌铺满原播放区 ✨一键自动解析  制作不易，有问题可加微信咨询：Why15236444193 [如果加微信未能及时回复，请多多包涵哈！]
 // @author       yyy404
 // @match        *://*/*
@@ -399,7 +399,7 @@
         {
             host: "www.iqiyi.com",
             container: "#outlayer,.iqp-player-videolayer,.m-video-player-wrap",
-            displayNodes: ["#playerPopup", "#vipCoversBox", "div.iqp-player-vipmask", "div.iqp-player-paymask", "div.iqp-player-loginmask", "div[class^=qy-header-login-pop]", ".covers_cloudCover__ILy8R", "#videoContent > div.loading_loading__vzq4j", ".iqp-player-guide", ".defaultController_playCtrl__Smes8", ".tips_textsBackImg__svIhR", "[class*='defaultController']", "[class*='player-buttons']", "[class*='tips_']", ".qy-player-controller", ".qy-player-tips", "[class*='danmu']", "[class*='Danmu']", ".iqp-danmu", ".qy-player-danmu", "[class*='barrage']", ".XPlayer_heatMapContainer__17MIj", ".progressBar_container__0x13u", ".XPlayer_bottom__xzRnb", "div.m-iqyGuide-layer", "a[down-app-android-url]", ".loading_loading__vzq4j", "[name=m-extendBar]", "[class*=ChannelHomeBanner]", "section.m-hotWords-bottom"]
+            displayNodes: ["#playerPopup", "#vipCoversBox", "div.iqp-player-vipmask", "div.iqp-player-paymask", "div.iqp-player-loginmask", "div[class^=qy-header-login-pop]", ".covers_cloudCover__ILy8R", "#videoContent > div.loading_loading__vzq4j", ".iqp-player-guide", ".defaultController_playCtrl__Smes8", ".tips_textsBackImg__svIhR", "[class*='defaultController']", "[class*='player-buttons']", "[class*='tips_']", ".qy-player-controller", ".qy-player-tips", "[class*='danmu']", "[class*='Danmu']", ".iqp-danmu", ".qy-player-danmu", "[class*='barrage']", ".XPlayer_heatMapContainer__17MIj", ".progressBar_container__0x13u", ".XPlayer_bottom__xzRnb", "div.m-iqyGuide-layer", "a[down-app-android-url]", ".loading_loading__vzq4j", "[name=m-extendBar]", "[class*=ChannelHomeBanner]", "section.m-hotWords-bottom", "[class*='webHead_title']", "[class*='webHead_playInClient']", "[class*='XPlayer_cover']"]
         },
         {
             host: "m.iqiyi.com",
@@ -2691,12 +2691,38 @@
     }
 
     // 生成播放器 iframe 的完整 HTML
-    function buildPlayerHtml(videoUrl, mode) {
+    function buildPlayerHtml(videoUrl, mode, episodeTitle) {
         const hlsSrc = getPlayerLib('hlsJs');
         const artSrc = mode === 'art' ? getPlayerLib('artPlayerJs') : '';
         // 广告过滤器：必须在 hls.js 之前注入（它要劫持 XHR/fetch）
         const adSrc = adFilterEnabled ? getPlayerLib('m3u8Filter') : '';
         const urlJs = JSON.stringify(String(videoUrl || ''));
+        // 「剧名 第N集」浮层：必须建在播放器根节点里（.art-video-player / #wrap），
+        // 否则点全屏后只渲染全屏元素本身，浮层在它外面就看不见了。
+        const titleText = String(episodeTitle || '');
+        const hasTitle = !!titleText;
+        const titleJs = JSON.stringify(titleText);
+
+        // 浮层显隐 + 关闭按钮：鼠标动就浮现，静止 3 秒淡出（跟爱奇艺一致）
+        const overlayJs = hasTitle ? ('(function(){'
+            + 'var bar=document.getElementById("epTitle");'
+            + 'var btn=document.getElementById("epClose");'
+            + 'if(!bar||!btn)return;'
+            + 'var hideTimer=null;'
+            + 'function show(){'
+            + 'clearTimeout(hideTimer);'
+            + 'bar.style.opacity="1";btn.style.opacity="1";btn.style.pointerEvents="auto";'
+            + 'hideTimer=setTimeout(function(){'
+            + 'bar.style.opacity="0";btn.style.opacity="0";btn.style.pointerEvents="none";'
+            + '},3000);}'
+            + 'document.addEventListener("mousemove",show,{passive:true});'
+            + 'document.addEventListener("touchstart",show,{passive:true});'
+            + 'btn.addEventListener("click",function(e){'
+            + 'e.stopPropagation();try{parent.location.reload();}catch(err){}});'
+            + 'window.__vipUpdateTitle=function(t){bar.textContent=t;bar.title=t;};'
+            // 初始露一次，让用户知道有这么个东西，然后自动淡出
+            + 'show();'
+            + '})();') : '';
 
         const initNative = '(function(){'
             + 'var wrap=document.getElementById("wrap");'
@@ -2740,14 +2766,40 @@
             // 暴露出去，父页面换集时用它原地换源（重建播放器会退出全屏）
             + 'window.__vipArt=ap;'
             + 'ap.on("video:ended",function(){try{parent.postMessage({type:"vipCollectEnded"},"*");}catch(e){}});'
+            // 把浮层和关闭按钮搬到播放器根节点里 —— 点全屏时全屏的就是这个节点，
+            // 建在它外面的东西全屏后都会被裁掉。
+            + (hasTitle ? ('var _bar=document.getElementById("epTitle");'
+                + 'var _btn=document.getElementById("epClose");'
+                + 'var _root=(ap.template&&ap.template.$player)||document.getElementById("wrap");'
+                + 'if(_bar&&_btn&&_root){_root.appendChild(_bar);_root.appendChild(_btn);}') : '')
             + '})();';
 
         return '<!DOCTYPE html><html><head><meta charset="utf-8">'
             + '<meta name="viewport" content="width=device-width,initial-scale=1.0">'
             + '<style>html,body{margin:0;padding:0;width:100%;height:100%;overflow:hidden;background:#000;}'
             + '#wrap{width:100%;height:100%;}'
-            + '.err{color:#ff8080;font:12px/1.6 sans-serif;padding:12px;}</style>'
+            + '.err{color:#ff8080;font:12px/1.6 sans-serif;padding:12px;}'
+            // 浮层样式照爱奇艺：24px 白字、52px 高。爱奇艺原版是纯透明，
+            // 但实测在浅色画面上白字基本看不见，所以这里压一层更实的渐变，保证任何画面都读得出来。
+            + '#epTitle{position:absolute;top:0;left:0;right:0;height:52px;'
+            + 'padding:20px 56px 0 32px;box-sizing:border-box;'
+            + 'background:linear-gradient(180deg,rgba(0,0,0,.82) 0%,rgba(0,0,0,.45) 58%,rgba(0,0,0,0) 100%);'
+            + 'color:#fff;font-size:24px;font-weight:400;line-height:32px;'
+            + 'font-family:Harmony_Regular,"PingFang SC","Microsoft YaHei",sans-serif;'
+            + 'white-space:nowrap;overflow:hidden;text-overflow:ellipsis;'
+            + 'text-shadow:0 2px 6px rgba(0,0,0,.9),0 0 2px rgba(0,0,0,.95);'
+            + 'z-index:9999;pointer-events:none;opacity:0;transition:opacity .2s linear;}'
+            + '#epClose{position:absolute;top:12px;right:18px;z-index:10000;'
+            + 'font-size:32px;line-height:1;color:rgba(255,255,255,.92);'
+            + 'cursor:pointer;user-select:none;'
+            + 'text-shadow:0 2px 5px rgba(0,0,0,.85);'
+            + 'opacity:0;transition:opacity .2s linear,transform .2s linear;pointer-events:none;}'
+            + '#epClose:hover{color:#fff;transform:scale(1.1);}'
+            + '</style>'
             + '</head><body><div id="wrap"></div>'
+            + (hasTitle ? ('<div id="epTitle"></div><div id="epClose">×</div>'
+                + '<script>' + escapeInlineScript('document.getElementById("epTitle").textContent=' + titleJs + ';'
+                    + 'document.getElementById("epTitle").title=' + titleJs + ';' + overlayJs) + '<\/script>') : '')
             + (adSrc ? '<script>' + escapeInlineScript(adSrc) + '<\/script>' : '')
             + '<script>' + escapeInlineScript(hlsSrc) + '<\/script>'
             + (artSrc ? '<script>' + escapeInlineScript(artSrc) + '<\/script>' : '')
@@ -2792,7 +2844,11 @@
     //   当前站没有配置时，降级成页面上的浮动播放器。
     function playCollectInPage(m3u8Url) {
         if (!m3u8Url) return;
-        const html = buildPlayerHtml(m3u8Url, collectPlayerMode);
+        // 「剧名 第N集」：采集源才有剧集信息，接口解析拿不到
+        const epTitle = (COLLECT_STATE.current && COLLECT_STATE.lastEp)
+            ? (String(COLLECT_STATE.current.name || '') + ' ' + String(COLLECT_STATE.lastEp.label || '')).trim()
+            : '';
+        const html = buildPlayerHtml(m3u8Url, collectPlayerMode, epTitle);
         playVideo({ name: '采集源', url: '' }, true, null, html, () => playCollectFloat(html));
     }
 
@@ -2883,6 +2939,17 @@
                 try { target.scrollIntoView({ block: 'nearest' }); } catch (e) { }
             }
         }
+        // 换集是原地换源、不重建播放器，所以 iframe 里那条「剧名 第N集」要手动改
+        const epTitleWrap = document.querySelector('.vip_jx_iframe_wrapper');
+        const epTitleFrame = epTitleWrap ? epTitleWrap.querySelector('iframe') : null;
+        if (epTitleFrame) {
+            try {
+                const iwin = epTitleFrame.contentWindow;
+                if (iwin && typeof iwin.__vipUpdateTitle === 'function') {
+                    iwin.__vipUpdateTitle((String((cur && cur.name) || '') + ' ' + String(next.label || '')).trim());
+                }
+            } catch (e) { }
+        }
         // 先试原地换源（全屏时不掉出全屏），换不了再退回重建
         if (!switchCollectSource(next.url)) {
             playCollectInPage(next.url);
@@ -2958,7 +3025,6 @@
         if (!e || !e.data || e.data.type !== 'vipCollectEnded') return;
         showCollectNextCountdown();
     });
-
     // 选中剧集后：直接在【页面播放器区】播；面板里保留地址 / 复制 / 播放器切换 / 重新播放
     function showCollectUrl(ep, sourceName, skipAutoPlay) {
         COLLECT_STATE.lastEp = ep;
@@ -5390,12 +5456,18 @@ https://zzz/?jx= 弹窗"></textarea>
                 iframe.referrerPolicy = 'no-referrer';
                 applyInlineStyles(iframe, frameLayout.iframeStyles);
 
-                // 创建关闭按钮
-                const closeBtn = document.createElement("div");
-                closeBtn.className = "vip-player-close-btn";
-                closeBtn.innerHTML = "×";
-                closeBtn.title = "关闭解析（刷新页面恢复原视频）";
-                closeBtn.style.cssText = `
+                // 创建关闭按钮：只有「接口解析」才建在父页面。
+                // 「采集源」的关闭按钮已经建在 iframe 内部了 —— 父页面那层透明鼠标捕获层
+                // （pointer-events: auto，铺满整个播放器）会把鼠标事件全吃掉，
+                // 导致 iframe 里的「剧名 第N集」浮层永远收不到 mousemove，鼠标动也不浮现。
+                const needParentClose = !playerHtml;
+                let closeBtn = null;
+                if (needParentClose) {
+                    closeBtn = document.createElement("div");
+                    closeBtn.className = "vip-player-close-btn";
+                    closeBtn.innerHTML = "×";
+                    closeBtn.title = "关闭解析（刷新页面恢复原视频）";
+                    closeBtn.style.cssText = `
                     position: absolute;
                     top: ${isMobile ? '10px' : '15px'};
                     right: ${isMobile ? '10px' : '15px'};
@@ -5415,20 +5487,22 @@ https://zzz/?jx= 弹窗"></textarea>
                     opacity: ${isMobile ? '1' : '0'};
                     pointer-events: ${isMobile ? 'auto' : 'none'};
                 `;
-                closeBtn.onclick = () => {
-                    clearVipPlaybackTimers();
-                    window.location.reload();
-                };
+                    closeBtn.onclick = () => {
+                        clearVipPlaybackTimers();
+                        window.location.reload();
+                    };
+                }
 
                 iframeWrapper.appendChild(iframe);
 
-                if (isMobile) {
-                    // 手机端：无鼠标捕获层，关闭按钮常显
-                    iframeWrapper.appendChild(closeBtn);
-                } else {
-                    // PC：透明捕获层 + 悬停显示关闭按钮
-                    const mouseCatcher = document.createElement('div');
-                    mouseCatcher.style.cssText = `
+                if (closeBtn) {
+                    if (isMobile) {
+                        // 手机端：无鼠标捕获层，关闭按钮常显
+                        iframeWrapper.appendChild(closeBtn);
+                    } else {
+                        // PC：透明捕获层 + 悬停显示关闭按钮
+                        const mouseCatcher = document.createElement('div');
+                        mouseCatcher.style.cssText = `
                         position: absolute;
                         top: 0;
                         left: 0;
@@ -5439,35 +5513,36 @@ https://zzz/?jx= 弹窗"></textarea>
                         background: transparent;
                     `;
 
-                    let hideTimer = null;
-                    const showCloseBtn = () => {
-                        clearTimeout(hideTimer);
-                        closeBtn.style.opacity = '1';
-                        closeBtn.style.pointerEvents = 'auto';
-                        mouseCatcher.style.pointerEvents = 'none';
-                        hideTimer = setTimeout(() => {
-                            closeBtn.style.opacity = '0';
-                            closeBtn.style.pointerEvents = 'none';
-                            mouseCatcher.style.pointerEvents = 'auto';
-                        }, 3000);
-                    };
+                        let hideTimer = null;
+                        const showCloseBtn = () => {
+                            clearTimeout(hideTimer);
+                            closeBtn.style.opacity = '1';
+                            closeBtn.style.pointerEvents = 'auto';
+                            mouseCatcher.style.pointerEvents = 'none';
+                            hideTimer = setTimeout(() => {
+                                closeBtn.style.opacity = '0';
+                                closeBtn.style.pointerEvents = 'none';
+                                mouseCatcher.style.pointerEvents = 'auto';
+                            }, 3000);
+                        };
 
-                    mouseCatcher.onmousemove = showCloseBtn;
-                    mouseCatcher.onmouseenter = showCloseBtn;
+                        mouseCatcher.onmousemove = showCloseBtn;
+                        mouseCatcher.onmouseenter = showCloseBtn;
 
-                    closeBtn.onmouseover = () => {
-                        clearTimeout(hideTimer);
-                        closeBtn.style.color = 'rgba(255, 255, 255, 1)';
-                        closeBtn.style.transform = 'scale(1.2)';
-                    };
-                    closeBtn.onmouseout = () => {
-                        closeBtn.style.color = 'rgba(255, 255, 255, 0.8)';
-                        closeBtn.style.transform = 'scale(1)';
-                        showCloseBtn();
-                    };
+                        closeBtn.onmouseover = () => {
+                            clearTimeout(hideTimer);
+                            closeBtn.style.color = 'rgba(255, 255, 255, 1)';
+                            closeBtn.style.transform = 'scale(1.2)';
+                        };
+                        closeBtn.onmouseout = () => {
+                            closeBtn.style.color = 'rgba(255, 255, 255, 0.8)';
+                            closeBtn.style.transform = 'scale(1)';
+                            showCloseBtn();
+                        };
 
-                    iframeWrapper.appendChild(mouseCatcher);
-                    iframeWrapper.appendChild(closeBtn);
+                        iframeWrapper.appendChild(mouseCatcher);
+                        iframeWrapper.appendChild(closeBtn);
+                    }
                 }
 
                 container.appendChild(iframeWrapper);
