@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         🫧404小站 — 🎬VIP追剧神器 | 完全免费 | 支持多平台 | (电脑/手机/平板...自适应)
 // @namespace    https://scriptcat.org/zh-CN/users/162063
-// @version      3.7.1
+// @version      3.7.2
 // @description  ▶在线VIP视频解析工具 (电脑/手机/平板...自适应) | free | 支持多平台【爱奇艺】【腾讯视频】【优酷土豆】【芒果TV】【乐视视频】【哔哩哔哩】【搜狐视频】等常见平台。✨9条解析接口实测可用 ✨内嵌播放无广告 ✨智能切集追剧 ✨内嵌铺满原播放区 ✨一键自动解析  制作不易，有问题可加微信咨询：Why15236444193 [如果加微信未能及时回复，请多多包涵哈！]
 // @author       yyy404
 // @match        *://*/*
@@ -2592,6 +2592,10 @@
         // 记住这一批结果的来源显示名：从剧集列表点「← 返回」时要用它重建标题
         COLLECT_STATE.listName = srcName || '';
         if (items.length === 1) {
+            // 命中 1 部时这里是「自动展开」，等价于已经选中了这部剧。
+            // 不记下来的话 COLLECT_STATE.current 会一直是 null，播完发 vipCollectEnded 之后
+            // findNextCollectEpisode() 因为 current 为空直接返回 null，自动下一集就不弹了。
+            COLLECT_STATE.current = items[0];
             renderCollectEpisodeList(items[0], srcName);
             return;
         }
@@ -2701,7 +2705,10 @@
             + 'v.controls=true;v.autoplay=true;v.muted=true;v.setAttribute("playsinline","");'
             + 'v.style.cssText="width:100%;height:100%;background:#000;display:block;";'
             + 'wrap.appendChild(v);'
-            + 'if(window.Hls&&Hls.isSupported()){var hls=new Hls();hls.loadSource(url);hls.attachMedia(v);}'
+            + 'window.__vipNativeVideo=v;'
+            + 'if(window.Hls&&Hls.isSupported()){'
+            + 'var hls=new Hls();hls.loadSource(url);hls.attachMedia(v);window.__vipHls=hls;'
+            + '}'
             + 'else if(v.canPlayType("application/vnd.apple.mpegurl")){v.src=url;}'
             + 'else{wrap.innerHTML=\'<div class="err">这个浏览器不支持 HLS 播放</div>\';}'
             + 'v.addEventListener("ended",function(){try{parent.postMessage({type:"vipCollectEnded"},"*");}catch(e){}});'
@@ -2714,8 +2721,13 @@
             + 'container:"#wrap",'
             + 'url:' + urlJs + ','
             + 'type:"m3u8",'
+            // 换集时会走这个 customType（ap.url = 新地址）。旧 hls 要先销毁，
+            // 否则每换一集就多留一个实例，越看越卡。
             + 'customType:{m3u8:function(video,url){'
-            + 'if(Hls.isSupported()){var hls=new Hls();hls.loadSource(url);hls.attachMedia(video);}'
+            + 'if(Hls.isSupported()){'
+            + 'try{if(window.__vipHls){window.__vipHls.destroy();}}catch(e){}'
+            + 'var hls=new Hls();window.__vipHls=hls;hls.loadSource(url);hls.attachMedia(video);'
+            + '}'
             + 'else if(video.canPlayType("application/vnd.apple.mpegurl")){video.src=url;}'
             + '}},'
             + 'autoplay:true,muted:true,volume:1,'
@@ -2725,6 +2737,8 @@
             + 'moreVideoAttr:{playsinline:true,"webkit-playsinline":true,preload:"auto"},'
             + 'miniProgressBar:true'
             + '});'
+            // 暴露出去，父页面换集时用它原地换源（重建播放器会退出全屏）
+            + 'window.__vipArt=ap;'
             + 'ap.on("video:ended",function(){try{parent.postMessage({type:"vipCollectEnded"},"*");}catch(e){}});'
             + '})();';
 
@@ -2786,10 +2800,24 @@
     // 播放器在 iframe 里（sandbox 带 allow-same-origin），播完会 postMessage 上来；
     // 这里接住，倒计时 3 秒后播下一集。取消有两个入口：倒计时条上的「取消」、或关掉采集页的开关。
     let collectNextTimer = null;
+    function findNextBar() {
+        const own = document.getElementById('collect-next-bar');
+        if (own) return own;
+        // 提示条可能挂在播放器 iframe 里（全屏时才看得见），父页面的 getElementById 找不到
+        const holder = document.querySelector('.vip_jx_iframe_wrapper');
+        const iframe = holder ? holder.querySelector('iframe') : null;
+        if (iframe) {
+            try {
+                const doc = iframe.contentDocument || (iframe.contentWindow && iframe.contentWindow.document);
+                if (doc) return doc.getElementById('collect-next-bar');
+            } catch (e) { }
+        }
+        return null;
+    }
     function clearCollectNextCountdown() {
         if (collectNextTimer) { clearInterval(collectNextTimer); collectNextTimer = null; }
-        const bar = document.getElementById('collect-next-bar');
-        if (bar) bar.remove();
+        const bar = findNextBar();
+        if (bar && bar.parentElement) bar.parentElement.removeChild(bar);
     }
     // 找「当前集的下一集」。episodes 是打平后的剧集数组（每个元素有 url / label / from）
     function findNextCollectEpisode() {
@@ -2800,29 +2828,104 @@
         if (i < 0 || i + 1 >= cur.episodes.length) return null;
         return cur.episodes[i + 1];
     }
+    // 原地换源：不重建 iframe，全屏状态能保住。
+    // 重建播放器（container.innerHTML='' + 新 iframe）会把全屏元素从文档里摘掉，
+    // 浏览器随即自动退出全屏 —— 所以换集优先走这里。
+    function switchCollectSource(url) {
+        const holder = document.querySelector('.vip_jx_iframe_wrapper');
+        const iframe = holder ? holder.querySelector('iframe') : null;
+        if (!iframe) return false;
+        try {
+            const win = iframe.contentWindow;
+            if (!win) return false;
+            // ① Artplayer 模式：用 url setter，内部会走 customType 只换 hls 源
+            const ap = win.__vipArt;
+            if (ap && !ap.isDestroy && typeof ap.url !== 'undefined') {
+                const wasMuted = ap.muted;
+                ap.url = url;
+                try { ap.play(); } catch (e) { }
+                if (wasMuted) { try { ap.muted = true; } catch (e) { } }
+                return true;
+            }
+            // ② 原生 video 模式：直接给 hls / video 换源
+            const doc = iframe.contentDocument;
+            const video = (doc ? doc.querySelector('video') : null) || win.__vipNativeVideo;
+            if (video) {
+                if (win.__vipHls && typeof win.__vipHls.loadSource === 'function') {
+                    win.__vipHls.loadSource(url);
+                } else if (win.Hls && win.Hls.isSupported()) {
+                    const h = new win.Hls();
+                    h.loadSource(url);
+                    h.attachMedia(video);
+                    win.__vipHls = h;
+                } else {
+                    video.src = url;
+                }
+                try { video.play(); } catch (e) { }
+                return true;
+            }
+        } catch (e) { }
+        return false;
+    }
     function playNextCollectEpisode() {
         const next = findNextCollectEpisode();
         if (!next) return false;
-        showCollectUrl(next, COLLECT_STATE.lastSrcName || '');
-        playCollectInPage(next.url);
+        const cur = COLLECT_STATE.current;
+        const nextIdx = (cur && Array.isArray(cur.episodes)) ? cur.episodes.indexOf(next) : -1;
+        showCollectUrl(next, COLLECT_STATE.lastSrcName || '', true);
+        // 同步剧集列表的高亮：不然列表还停在上一个集上，跟正在播的对不上
+        const epBox = DOM_CACHE.collectEpisodes;
+        if (epBox && nextIdx >= 0) {
+            epBox.querySelectorAll('.collect-ep').forEach((el) => el.classList.remove('selected'));
+            const target = epBox.querySelector('.collect-ep[data-ei="' + nextIdx + '"]');
+            if (target) {
+                target.classList.add('selected');
+                try { target.scrollIntoView({ block: 'nearest' }); } catch (e) { }
+            }
+        }
+        // 先试原地换源（全屏时不掉出全屏），换不了再退回重建
+        if (!switchCollectSource(next.url)) {
+            playCollectInPage(next.url);
+        }
         return true;
+    }
+    // 提示条挂哪儿：必须挂在 Artplayer 的播放器根节点（.art-video-player）里。
+    // 原因：点全屏时 Artplayer 全屏的是 .art-video-player 这个节点本身，
+    // 挂在它外面（哪怕只挂到它的父节点 #wrap）都不在全屏元素的后代树里，一进全屏就整块被裁掉。
+    function getNextBarHost(holder) {
+        if (holder) {
+            const iframe = holder.querySelector('iframe');
+            if (iframe) {
+                try {
+                    const doc = iframe.contentDocument || (iframe.contentWindow && iframe.contentWindow.document);
+                    if (doc) {
+                        const apRoot = doc.querySelector('.art-video-player')
+                            || doc.getElementById('wrap')
+                            || doc.body;
+                        if (apRoot) return { host: apRoot, inIframe: true };
+                    }
+                } catch (e) { }
+            }
+            return { host: holder, inIframe: false };
+        }
+        return { host: document.body, inIframe: false };
     }
     function showCollectNextCountdown() {
         if (!collectAutoNext) return;
         if (!findNextCollectEpisode()) return;                // 已经是最后一集 → 不弹
         clearCollectNextCountdown();
-        // 提示挂在播放器正中。不用方框（用户觉得有框很丑），只用文字 + 轻微阴影保证在任何画面上都看得清。
+        // 提示挂在播放器正中。样式保持无框（有边框和底色看着闷），
+        // 靠多层文字阴影把字从任何画面上托出来。
         const holder = document.querySelector('.vip_jx_iframe_wrapper');
         const bar = document.createElement('div');
         bar.id = 'collect-next-bar';
-        const posStyle = holder
-            ? 'position:absolute;left:50%;top:50%;transform:translate(-50%,-50%);'
-            : 'position:fixed;left:50%;top:50%;transform:translate(-50%,-50%);';
+        const posStyle = 'position:fixed;left:50%;top:50%;transform:translate(-50%,-50%);';
         bar.style.cssText = posStyle + 'z-index:2147483000;'
             + 'background:transparent;border:none;color:#fff;padding:0;'
             + 'display:flex;flex-direction:column;align-items:center;gap:10px;'
             + 'font-size:16px;font-weight:bold;line-height:1.6;text-align:center;'
-            + 'text-shadow:0 2px 8px rgba(0,0,0,.95),0 0 3px rgba(0,0,0,.9);pointer-events:none;';
+            + 'text-shadow:0 1px 2px rgba(0,0,0,.98),0 2px 6px rgba(0,0,0,.92),0 0 14px rgba(0,0,0,.8);'
+            + 'pointer-events:none;';
         let left = 4;
         const txt = document.createElement('span');
         const btn = document.createElement('button');
@@ -2835,12 +2938,12 @@
         tick();
         bar.appendChild(txt);
         bar.appendChild(btn);
-        if (holder) {
+        const pick = getNextBarHost(holder);
+        if (!pick.inIframe && holder) {
             if (getComputedStyle(holder).position === 'static') holder.style.position = 'relative';
-            holder.appendChild(bar);
-        } else {
-            document.body.appendChild(bar);
+            bar.style.position = 'absolute';
         }
+        pick.host.appendChild(bar);
         collectNextTimer = setInterval(() => {
             left -= 1;
             tick();
@@ -2857,7 +2960,7 @@
     });
 
     // 选中剧集后：直接在【页面播放器区】播；面板里保留地址 / 复制 / 播放器切换 / 重新播放
-    function showCollectUrl(ep, sourceName) {
+    function showCollectUrl(ep, sourceName, skipAutoPlay) {
         COLLECT_STATE.lastEp = ep;
         COLLECT_STATE.lastSrcName = sourceName || '';
         const box = DOM_CACHE.collectOutput;
@@ -2907,8 +3010,8 @@
             }
         }
 
-        // 直接在页面播放器区开播
-        playCollectInPage(ep.url);
+        // 直接在页面播放器区开播（换集走原地换源时传 skipAutoPlay=true，避免重建播放器）
+        if (!skipAutoPlay) playCollectInPage(ep.url);
     }
 
     function collectMarkSelected(idx) {
