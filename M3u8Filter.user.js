@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         🫧404小站 — 🎬M3U8 广告过滤器
 // @namespace    https://github.com/whyyy-404/video_freevip
-// @version      1.0.4
+// @version      1.0.5
 // @description  拦截 m3u8 播放列表，删除插播广告片段（7 种删除策略 + 2 种修复）
 // @author       yyy404
 // @match        *://*/*
@@ -599,6 +599,74 @@
     }
 
     /**
+     * 策略 ⑧：按签名参数白名单删除（默认关）
+     * 场景：正片 ts 都带签名参数（sign / token / key / auth_key / expires / version），
+     *      广告 ts 是裸地址。只在「带签名的显著多于不带」时才动手。
+     *
+     * 四道保险：
+     *   ① 片段数 >= 10
+     *   ② 不带的必须 > 0（否则没东西删）
+     *   ③ 带签名的必须是不带的 SIGN_RATIO 倍以上
+     *   ④ 要删的不超过总数的一半
+     */
+    // 签名参数识别。
+    //   能认：?key= / ?sign= / ?token= / ?vkey= / ?sk= / ?expires= / ?version= /
+    //         ?auth_key= / ?video_key=（任意 xxx_key 形式）
+    //   不认：?monkey= 这类没有下划线分隔的同名尾巴（避免误伤）
+    var SIGN_RE = /[\?&](?:[a-z_]*?(?:sign|token|version|expires|vkey|sk)|(?:[a-z_]+_)?key)=/i;
+
+    function removeBySignatureWhitelist(text, opts) {
+        opts = opts || {};
+        var ratio = opts.signatureRatio || 2;
+
+        var segs = parseSegments(text);
+        if (segs.length < 10) {
+            return { text: text, removed: 0, strategy: 'signature', reason: '片段太少(' + segs.length + ')' };
+        }
+
+        var signed = [], unsigned = [];
+        segs.forEach(function (s) {
+            if (SIGN_RE.test(s.url)) signed.push(s); else unsigned.push(s);
+        });
+
+        if (unsigned.length === 0) {
+            return { text: text, removed: 0, strategy: 'signature', reason: '全部带签名，无广告' };
+        }
+        if (signed.length < unsigned.length * ratio) {
+            return {
+                text: text, removed: 0, strategy: 'signature',
+                reason: '带签名 ' + signed.length + ' 不足不带 ' + unsigned.length + ' 的 ' + ratio + ' 倍'
+            };
+        }
+        if (unsigned.length > segs.length / 2) {
+            return {
+                text: text, removed: 0, strategy: 'signature',
+                reason: '要删 ' + unsigned.length + ' 超过总数一半'
+            };
+        }
+
+        var del = {};
+        unsigned.forEach(function (sg) {
+            del[sg.lineIdx] = true;
+            del[sg.urlLineIdx] = true;
+        });
+
+        var lines = text.split(/\r?\n/);
+        var out = [];
+        for (var i = 0; i < lines.length; i++) {
+            if (!del[i]) out.push(lines[i]);
+        }
+
+        log('签名白名单删除: ' + unsigned.length + ' 个（带签名 ' + signed.length + ' 个）');
+        return {
+            text: out.join('\n'),
+            removed: unsigned.length,
+            strategy: 'signature',
+            detail: { signed: signed.length, unsigned: unsigned.length }
+        };
+    }
+
+    /**
      * 策略 ④：两路径时，删总时长短的那一路
      * 场景：正片走 CDN-A，广告走 CDN-B，两条路径各自成段
      * 判据：路径只有 2 组，且两组总时长差 >= 3 倍
@@ -969,6 +1037,24 @@
         var origSegs = parseSegments(text);
         result.original.segs = origSegs.length;
 
+        // 全局熔断：整集只走一条路径前缀 = 没有广告可删。
+        // 后面的策略要么需要 >=2 组前缀才能比较，要么需要 DISCONTINUITY，
+        // 单组情况下它们全都是空转，直接返回能省掉整轮解析。
+        // 例外：策略⑧（签名白名单）不看路径分组，单组时照样有效 —— 广告可能
+        // 混进正片同一个目录里，只靠签名参数区分，所以它开着的时候不能熔断。
+        var _pfSeen = {};
+        var _pfCount = 0;
+        for (var _pi = 0; _pi < origSegs.length; _pi++) {
+            var _pk = origSegs[_pi].prefix;
+            if (!_pfSeen[_pk]) { _pfSeen[_pk] = 1; _pfCount++; if (_pfCount > 1) break; }
+        }
+        if (_pfCount <= 1 && origSegs.length > 0 && !opts.useSignatureWhitelist) {
+            result.log.push('全局熔断: 只有 1 组路径，跳过所有策略');
+            result.final.len = text.length;
+            result.final.segs = origSegs.length;
+            return { text: text, result: result };
+        }
+
         var cur = text;
 
         // 策略 ①：标记型
@@ -1051,6 +1137,20 @@
                 cur = r7ad.text;
             } else if (r7ad.reason) {
                 result.log.push('重复广告块跳过: ' + r7ad.reason);
+            }
+        }
+
+        // 策略 ⑧：签名白名单（默认关）
+        // 跟前面的策略不重叠：前面的按路径/时长/长度分组，这个只认「有没有签名参数」。
+        // 用在「广告混进正片同一路径、占比型失效」的场景。
+        if (opts.useSignatureWhitelist) {
+            var r8 = removeBySignatureWhitelist(cur, opts);
+            if (r8.removed > 0) {
+                result.strategies.push({ name: '签名白名单', removed: r8.removed, detail: r8.detail });
+                result.log.push('签名白名单: 删除 ' + r8.removed + ' 个片段');
+                cur = r8.text;
+            } else if (r8.reason) {
+                result.log.push('签名白名单跳过: ' + r8.reason);
             }
         }
 
@@ -1240,7 +1340,7 @@
      * ====================================================================== */
 
     window.__M3U8F__ = {
-        version: '1.0.4',
+        version: '1.0.5',
 
         // 纯函数，可单独测试
         isM3U8: isM3U8,
@@ -1255,6 +1355,7 @@
         removeShorterPath: removeShorterPath,
         removeByDurationMode: removeByDurationMode,
         removeByUrlLengthMode: removeByUrlLengthMode,
+        removeBySignatureWhitelist: removeBySignatureWhitelist,
         repairExtinfPairs: repairExtinfPairs,
         fixMetadata: fixMetadata,
         filterM3U8: filterM3U8,
@@ -1274,6 +1375,7 @@
             console.log('  __M3U8F__.removeShorterPath(文本)       只测双路径型');
             console.log('  __M3U8F__.removeByDurationMode(文本)    只测时长众数型');
             console.log('  __M3U8F__.removeByUrlLengthMode(文本)   只测URL长度众数型');
+            console.log('  __M3U8F__.removeBySignatureWhitelist(文本) 只测签名白名单');
             console.log('  __M3U8F__.removeDuplicateAdBlocks(文本) 只测重复广告块');
             console.log('  __M3U8F__.isFillerDuration("19.6333")   判断是否填充值时长');
             console.log('  __M3U8F__.repairExtinfPairs(文本)       只测EXTINF配对修复');
@@ -1283,5 +1385,5 @@
         }
     };
 
-    log('已加载 v1.0.4（XHR + fetch 劫持已就绪）');
+    log('已加载 v1.0.5（XHR + fetch 劫持已就绪）');
 })();

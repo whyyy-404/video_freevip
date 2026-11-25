@@ -6,7 +6,7 @@
 
 **拦截 m3u8 播放列表，删除插播广告片段 —— 6 种删除策略 + 2 种修复**
 
-[![Version](https://img.shields.io/badge/version-1.0.4-3fd9b8?style=flat)](#)
+[![Version](https://img.shields.io/badge/version-1.0.5-3fd9b8?style=flat)](#)
 [![License: GPL-3.0](https://img.shields.io/badge/License-GPL--3.0-1f6feb.svg)](https://github.com/whyyy-404/video_freevip/blob/main/LICENSE)
 [![脚本猫](https://img.shields.io/badge/%E8%84%9A%E6%9C%AC%E7%8C%AB-%E7%82%B9%E5%87%BB%E5%AE%89%E8%A3%85-3fd9b8?style=flat)](https://scriptcat.org/zh-CN/script-show-page/9073)
 [![Greasy Fork](https://img.shields.io/badge/Greasy%20Fork-%E7%82%B9%E5%87%BB%E5%AE%89%E8%A3%85-ffa64d?style=flat)](https://greasyfork.org/zh-CN/scripts/605297)
@@ -78,7 +78,7 @@ window.__M3U8F_LOADED__ = true;
 
 ---
 
-## 🎯 7 种删除策略
+## 🎯 8 种删除策略
 
 | # | 策略 | 原理 | 触发条件 |
 | --- | --- | --- | --- |
@@ -89,6 +89,7 @@ window.__M3U8F_LOADED__ = true;
 | ⑤ | **时长众数型** | 与正片时长众数不符的片段 | 众数占比 ≥ 95% |
 | ⑥ | **URL 长度众数型** | 与正片地址长度众数不符的片段 | 众数占比 ≥ 78.9% |
 | ⑦ | **重复广告块** | 块内 4~6 片、总长 ≤ 25s，且同一段内容在整集里重复出现 | 默认开启 |
+| ⑧ | **签名白名单** | ts 地址带签名参数（`key`/`sign`/`token` 等）的算正片，不带的算广告 | **默认关闭** |
 
 ### ① 标记型
 
@@ -192,6 +193,79 @@ window.__M3U8F_LOADED__ = true;
 **⇒ 补充判据「填充值」：**部分采集站生成假时长时，小数部分会有连续重复数字（如 `19.6333` / `19.6667`）。这种块即使只出现一次也判定为广告。
 
 **⇒ 默认开启，可用 `filterM3U8(文本, { useDupAd: false })` 关掉。**
+
+### ⑧ 签名白名单（默认关闭）
+
+**⇒ 正片的 ts 地址通常带防盗链签名，广告的 ts 往往是裸地址。**
+
+```m3u8
+# 正片：带 ?key= 签名
+https://cdn.example.com/videos/20261121/abc.ts?key=014620e34fca...
+
+# 广告：裸地址，没有任何查询参数
+https://ad.example.net/20261121/xxx/1000kb/hls/JZf1wxKw.ts
+```
+
+**⇒ 认哪些参数名（大小写不敏感）：**
+
+| 参数 | 说明 |
+|---|---|
+| `key` | 最常见（`?key=xxx`）|
+| `auth_key` / `video_key` 等 | 任何 `xxx_key` 形式 |
+| `sign` | 签名 |
+| `token` | 令牌 |
+| `vkey` | 视频密钥 |
+| `sk` | secret key |
+| `expires` | 过期时间 |
+| `version` | 版本 |
+
+**⇒ 不认 `monkey` 这类没有下划线分隔的同名尾巴，避免误伤。**
+
+**⇒ 四道保险：**
+
+| # | 保险 |
+|---|---|
+| 1 | 片段数 ≥ 10 |
+| 2 | 不带签名的必须 > 0（否则没东西删）|
+| 3 | 带签名的必须是不带的 **2 倍以上** |
+| 4 | 要删的不超过总数的一半 |
+
+**⇒ 为什么默认关闭：**
+
+**⇒ 现有策略②（占比型）已经能覆盖大多数广告。策略⑧ 针对的是另一类情况：广告与正片路径前缀相同，此时策略② 分不出来，只能靠签名参数区分。**
+
+**⇒ 打开方式（控制台）：**
+
+```javascript
+// 单次测试
+__M3U8F__.filterM3U8(文本, { useSignatureWhitelist: true })
+
+// 或在劫持时生效（需要自己改 handleText 的调用）
+```
+
+**⇒ 实测数据（某解析接口，单集样本）：**
+
+| 项 | 值 |
+|---|---|
+| 片段总数 | 693 |
+| 带 `?key=` 签名 | **687（99.1%）** |
+| 不带签名 | **6（0.9%）** |
+| 不带签名的 6 个 | 6 个广告片段（`askutrc5ss.com`，合计 17.64 秒）|
+| 策略⑧ 预判 | ✅ 会删除这 6 个 |
+
+**⇒ 与策略② 的分工：策略② 按路径前缀分组判断，策略⑧ 按签名参数判断，两者看的是不同维度。当广告与正片路径前缀相同时，策略② 分不出来，策略⑧ 仍可能识别。**
+
+---
+
+## ⚡ 全局熔断
+
+**⇒ 整集只有 1 组路径前缀时（说明没有换 CDN、没有分广告目录），直接跳过所有策略。**
+
+**⇒ 为什么：**后面的策略要么需要 ≥2 组前缀才能比较（②④），要么需要 `DISCONTINUITY`（③⑦），单组情况下全都是空转。**
+
+**⇒ 例外：策略⑧ 开着的时候不熔断** —— 它不看路径分组，单组时照样有效（广告可能混进正片同一个目录）。
+
+**⇒ 效果：693 片段的 m3u8 能省掉一次完整解析。**
 
 ---
 
@@ -303,7 +377,7 @@ __M3U8F__.help()
 ### 日志长什么样
 
 ```
-[M3U8过滤] 已加载 v1.0.4（XHR + fetch 劫持已就绪）
+[M3U8过滤] 已加载 v1.0.5（XHR + fetch 劫持已就绪）
 [M3U8过滤] 拦截 https://xxx.com/playlist.m3u8  → 删除 28 个片段
 [M3U8过滤]   · 占比型: 28
 [M3U8过滤] 元数据: TARGETDURATION: #EXT-X-TARGETDURATION:4 → #EXT-X-TARGETDURATION:8
