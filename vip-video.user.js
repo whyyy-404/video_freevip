@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         🫧404小站 — 🎬VIP追剧神器 | 完全免费 | 支持多平台 | (电脑/手机/平板...自适应)
 // @namespace    https://scriptcat.org/zh-CN/users/162063
-// @version      3.7.3
+// @version      3.7.4
 // @description  ▶在线VIP视频解析工具 (电脑/手机/平板...自适应) | free | 支持多平台【爱奇艺】【腾讯视频】【优酷土豆】【芒果TV】【乐视视频】【哔哩哔哩】【搜狐视频】等常见平台。✨9条解析接口实测可用 ✨内嵌播放无广告 ✨智能切集追剧 ✨内嵌铺满原播放区 ✨一键自动解析  制作不易，有问题可加微信咨询：Why15236444193 [如果加微信未能及时回复，请多多包涵哈！]
 // @author       yyy404
 // @match        *://*/*
@@ -192,7 +192,12 @@
         };
 
         if (!buildGate()) {
-            const waitBody = setInterval(() => { if (buildGate()) clearInterval(waitBody); }, 1);
+            // 3.7.4：改用 MutationObserver 等 <body> 出现，不再 1ms 轮询空转。
+            // document-start 时 body 还不存在，watch documentElement 的子节点就够了。
+            const waitObs = new MutationObserver(() => {
+                if (buildGate()) waitObs.disconnect();
+            });
+            waitObs.observe(document.documentElement, { childList: true, subtree: true });
         }
         document.addEventListener('DOMContentLoaded', dropOthers, { once: true });
         window.addEventListener('load', dropOthers, { once: true });
@@ -258,17 +263,17 @@
         // ⚠️ type 用 "1,3" 是故意的：66网2 内嵌被域名授权挡所以只敢写 "3"；这条静态检查没发现拦截，
         //    但静态查不出运行时的域名授权 ⇒ 写 "1,3" 让界面上能【一键切内嵌/弹窗】自己试。
         {"name": "麒麟1", "type": "1,3", "url": "https://free.maccms.xyz/?url="},
-        {"name": "789", "type": "1,3", "url": "https://jiexi.789jiexi.com/?url="},
+        {"name": "937", "type": "1,3", "url": "https://jx.937937.online/?url="},
         // 邦宁：解析结果特殊，所以单独一个颜色。放在最后 —— 原来紧跟 66网那组（蓝绿）之后、
         // 那时 66网还是纯绿，红绿相邻对红绿色弱不友好；现在绿已换蓝绿，而且它排在家族顺序的末位。
         {"name": "邦宁", "type": "1,3", "url": "https://video.isyour.love/player/getplayer?url="},
         // ===== 以下 10 条没有颜色（不属于上面任何一家）=====
         {"name": "M1907", "type": "1,2,3", "url": "https://im1907.top/?jx="},
+        {"name": "789", "type": "1,3", "url": "https://jiexi.789jiexi.com/?url="},
         // ---------- 第三组：响应不稳定，保留备用 ----------     
         {"name": "盘古", "type": "1,3", "url": "https://www.pangujiexi.com/jiexi/?url="},
         {"name": "PM", "type": "1,3", "url": "https://www.playm3u8.cn/jiexi.php?url="},
         {"name": "m3u8tv", "type": "1,3", "url": "https://jx.m3u8.tv/jiexi/?url="},
-        {"name": "bd解析", "type": "1,3", "url": "https://bd.jx.cn/?url="},
         {"name": "加速7", "type": "1,3", "url": "https://v.jiasu7.top/jx.php?url="},
         // ---------- 第四组：播放异常，保留备用 ----------
         {"name": "45网", "type": "1,3", "url": "http://45.207.198.92:8899/?url="},
