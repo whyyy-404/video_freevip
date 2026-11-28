@@ -1,9 +1,11 @@
 // ==UserScript==
 // @name         🫧404小站 — 🎬VIP追剧神器 | 完全免费 | 支持多平台 | (电脑/手机/平板...自适应)
 // @namespace    https://scriptcat.org/zh-CN/users/162063
-// @version      3.7.4
+// @version      3.7.4.4
 // @description  ▶在线VIP视频解析工具 (电脑/手机/平板...自适应) | free | 支持多平台【爱奇艺】【腾讯视频】【优酷土豆】【芒果TV】【乐视视频】【哔哩哔哩】【搜狐视频】等常见平台。✨9条解析接口实测可用 ✨内嵌播放无广告 ✨智能切集追剧 ✨内嵌铺满原播放区 ✨一键自动解析  制作不易，有问题可加微信咨询：Why15236444193 [如果加微信未能及时回复，请多多包涵哈！]
 // @author       yyy404
+// @homepageURL  https://scriptcat.org/zh-CN/script-show-page/3299
+// @supportURL   https://scriptcat.org/zh-CN/script-show-page/3299/issue
 // @match        *://*/*
 // @grant        GM_registerMenuCommand
 // @grant        GM_addStyle
@@ -13,7 +15,7 @@
 // @grant        GM_xmlhttpRequest
 // @resource     hlsJs       https://gcore.jsdelivr.net/npm/hls.js@1.7.3/dist/hls.min.js
 // @resource     artPlayerJs https://gcore.jsdelivr.net/npm/artplayer@5.4.0/dist/artplayer.js
-// @resource     m3u8Filter  https://cdn.jsdelivr.net/gh/whyyy-404/video_freevip@main/M3u8Filter.user.js
+// @resource     m3u8Filter  https://gcore.jsdelivr.net/gh/whyyy-404/video_freevip@main/M3u8Filter.user.js
 // @grant        GM_getResourceText
 // @connect      *
 // @run-at       document-start
@@ -78,6 +80,8 @@
                 }
             }
         } catch (e) { }
+
+
         return;
     }
 
@@ -2708,22 +2712,19 @@
         const hasTitle = !!titleText;
         const titleJs = JSON.stringify(titleText);
 
-        // 浮层显隐 + 关闭按钮：鼠标动就浮现，静止 3 秒淡出（跟爱奇艺一致）
+        // 浮层显隐：鼠标动就浮现，静止 3 秒淡出（跟爱奇艺一致）
         const overlayJs = hasTitle ? ('(function(){'
             + 'var bar=document.getElementById("epTitle");'
-            + 'var btn=document.getElementById("epClose");'
-            + 'if(!bar||!btn)return;'
+            + 'if(!bar)return;'
             + 'var hideTimer=null;'
             + 'function show(){'
             + 'clearTimeout(hideTimer);'
-            + 'bar.style.opacity="1";btn.style.opacity="1";btn.style.pointerEvents="auto";'
+            + 'bar.style.opacity="1";'
             + 'hideTimer=setTimeout(function(){'
-            + 'bar.style.opacity="0";btn.style.opacity="0";btn.style.pointerEvents="none";'
+            + 'bar.style.opacity="0";'
             + '},3000);}'
             + 'document.addEventListener("mousemove",show,{passive:true});'
             + 'document.addEventListener("touchstart",show,{passive:true});'
-            + 'btn.addEventListener("click",function(e){'
-            + 'e.stopPropagation();try{parent.location.reload();}catch(err){}});'
             + 'window.__vipUpdateTitle=function(t){bar.textContent=t;bar.title=t;};'
             // 初始露一次，让用户知道有这么个东西，然后自动淡出
             + 'show();'
@@ -2771,12 +2772,11 @@
             // 暴露出去，父页面换集时用它原地换源（重建播放器会退出全屏）
             + 'window.__vipArt=ap;'
             + 'ap.on("video:ended",function(){try{parent.postMessage({type:"vipCollectEnded"},"*");}catch(e){}});'
-            // 把浮层和关闭按钮搬到播放器根节点里 —— 点全屏时全屏的就是这个节点，
+            // 把浮层搬到播放器根节点里 —— 点全屏时全屏的就是这个节点，
             // 建在它外面的东西全屏后都会被裁掉。
             + (hasTitle ? ('var _bar=document.getElementById("epTitle");'
-                + 'var _btn=document.getElementById("epClose");'
                 + 'var _root=(ap.template&&ap.template.$player)||document.getElementById("wrap");'
-                + 'if(_bar&&_btn&&_root){_root.appendChild(_bar);_root.appendChild(_btn);}') : '')
+                + 'if(_bar&&_root){_root.appendChild(_bar);}') : '')
             + '})();';
 
         return '<!DOCTYPE html><html><head><meta charset="utf-8">'
@@ -2794,15 +2794,9 @@
             + 'white-space:nowrap;overflow:hidden;text-overflow:ellipsis;'
             + 'text-shadow:0 2px 6px rgba(0,0,0,.9),0 0 2px rgba(0,0,0,.95);'
             + 'z-index:9999;pointer-events:none;opacity:0;transition:opacity .2s linear;}'
-            + '#epClose{position:absolute;top:12px;right:18px;z-index:10000;'
-            + 'font-size:32px;line-height:1;color:rgba(255,255,255,.92);'
-            + 'cursor:pointer;user-select:none;'
-            + 'text-shadow:0 2px 5px rgba(0,0,0,.85);'
-            + 'opacity:0;transition:opacity .2s linear,transform .2s linear;pointer-events:none;}'
-            + '#epClose:hover{color:#fff;transform:scale(1.1);}'
             + '</style>'
             + '</head><body><div id="wrap"></div>'
-            + (hasTitle ? ('<div id="epTitle"></div><div id="epClose">×</div>'
+            + (hasTitle ? ('<div id="epTitle"></div>'
                 + '<script>' + escapeInlineScript('document.getElementById("epTitle").textContent=' + titleJs + ';'
                     + 'document.getElementById("epTitle").title=' + titleJs + ';' + overlayJs) + '<\/script>') : '')
             + (adSrc ? '<script>' + escapeInlineScript(adSrc) + '<\/script>' : '')
@@ -5450,6 +5444,7 @@ https://zzz/?jx= 弹窗"></textarea>
                 applyInlineStyles(iframeWrapper, frameLayout.wrapperStyles);
 
                 const iframe = document.createElement('iframe');
+
                 if (playerHtml) {
                     iframe.setAttribute('sandbox', COLLECT_PLAYER_SANDBOX);
                 } else {
@@ -5461,94 +5456,7 @@ https://zzz/?jx= 弹窗"></textarea>
                 iframe.referrerPolicy = 'no-referrer';
                 applyInlineStyles(iframe, frameLayout.iframeStyles);
 
-                // 创建关闭按钮：只有「接口解析」才建在父页面。
-                // 「采集源」的关闭按钮已经建在 iframe 内部了 —— 父页面那层透明鼠标捕获层
-                // （pointer-events: auto，铺满整个播放器）会把鼠标事件全吃掉，
-                // 导致 iframe 里的「剧名 第N集」浮层永远收不到 mousemove，鼠标动也不浮现。
-                const needParentClose = !playerHtml;
-                let closeBtn = null;
-                if (needParentClose) {
-                    closeBtn = document.createElement("div");
-                    closeBtn.className = "vip-player-close-btn";
-                    closeBtn.innerHTML = "×";
-                    closeBtn.title = "关闭解析（刷新页面恢复原视频）";
-                    closeBtn.style.cssText = `
-                    position: absolute;
-                    top: ${isMobile ? '10px' : '15px'};
-                    right: ${isMobile ? '10px' : '15px'};
-                    z-index: 2;
-                    width: auto;
-                    height: auto;
-                    padding: ${isMobile ? '6px 12px' : '5px 10px'};
-                    background: ${isMobile ? 'rgba(0, 0, 0, 0.35)' : 'transparent'};
-                    border: none;
-                    border-radius: ${isMobile ? '6px' : '0'};
-                    cursor: pointer;
-                    font-size: ${isMobile ? '28px' : '32px'};
-                    line-height: 1;
-                    color: rgba(255, 255, 255, 0.9);
-                    transition: all 0.3s ease;
-                    text-shadow: 0 2px 4px rgba(0,0,0,0.5);
-                    opacity: ${isMobile ? '1' : '0'};
-                    pointer-events: ${isMobile ? 'auto' : 'none'};
-                `;
-                    closeBtn.onclick = () => {
-                        clearVipPlaybackTimers();
-                        window.location.reload();
-                    };
-                }
-
                 iframeWrapper.appendChild(iframe);
-
-                if (closeBtn) {
-                    if (isMobile) {
-                        // 手机端：无鼠标捕获层，关闭按钮常显
-                        iframeWrapper.appendChild(closeBtn);
-                    } else {
-                        // PC：透明捕获层 + 悬停显示关闭按钮
-                        const mouseCatcher = document.createElement('div');
-                        mouseCatcher.style.cssText = `
-                        position: absolute;
-                        top: 0;
-                        left: 0;
-                        width: 100%;
-                        height: 100%;
-                        z-index: 1;
-                        pointer-events: auto;
-                        background: transparent;
-                    `;
-
-                        let hideTimer = null;
-                        const showCloseBtn = () => {
-                            clearTimeout(hideTimer);
-                            closeBtn.style.opacity = '1';
-                            closeBtn.style.pointerEvents = 'auto';
-                            mouseCatcher.style.pointerEvents = 'none';
-                            hideTimer = setTimeout(() => {
-                                closeBtn.style.opacity = '0';
-                                closeBtn.style.pointerEvents = 'none';
-                                mouseCatcher.style.pointerEvents = 'auto';
-                            }, 3000);
-                        };
-
-                        mouseCatcher.onmousemove = showCloseBtn;
-                        mouseCatcher.onmouseenter = showCloseBtn;
-
-                        closeBtn.onmouseover = () => {
-                            clearTimeout(hideTimer);
-                            closeBtn.style.color = 'rgba(255, 255, 255, 1)';
-                            closeBtn.style.transform = 'scale(1.2)';
-                        };
-                        closeBtn.onmouseout = () => {
-                            closeBtn.style.color = 'rgba(255, 255, 255, 0.8)';
-                            closeBtn.style.transform = 'scale(1)';
-                            showCloseBtn();
-                        };
-
-                        iframeWrapper.appendChild(mouseCatcher);
-                        iframeWrapper.appendChild(closeBtn);
-                    }
-                }
 
                 container.appendChild(iframeWrapper);
 
